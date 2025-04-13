@@ -56,8 +56,8 @@ with open(args.output_file, 'w') as output_file:
                     address_obj.get('region', ''),
                     address_obj.get('country', '')
                 ])
-                
-                output_file.write(f"VALUES ('{placeid}','{coordinates}','{names.replace('\'', '\'\'')}','{categories}','{websites}','{socials}','{address_str.replace('\'', '\'\'')}'),\n")
+        
+                output_file.write(f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_str}'),\n")
             except json.JSONDecodeError:
                     print(f"Skipping invalid JSON line: {line.strip()}")    
         output_file.write(f";\n")
