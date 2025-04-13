@@ -22,6 +22,7 @@ parser.add_argument('-i', '--input_file', type=str, help="Path to the GeoJSON fi
 parser.add_argument('-o', '--output_file', type=str, help="Path to the sql output to process")
 
 args = parser.parse_args()
+fail_counter = 0
 
 with open(args.output_file, 'w') as output_file:
     output_file.write('''CREATE TABLE IF NOT EXISTS geojson_data (
@@ -59,7 +60,10 @@ with open(args.output_file, 'w') as output_file:
         
                 output_file.write(f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_str}'),\n")
             except json.JSONDecodeError:
-                    print(f"Skipping invalid JSON line: {line.strip()}")    
+                    print(f"Skipping invalid JSON line: {line.strip()}")  
+                    fail_counter += 1
+                    if fail_counter>10:
+                        break  
         output_file.write(f";\n")
  
 
