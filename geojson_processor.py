@@ -46,9 +46,9 @@ with open(args.output_file, 'w') as output_file:
                 coordinates = geojson['geometry']['coordinates']
                 placeid = geojson['properties']['id']
                 names = geojson['properties']['names']['primary']
-                categories = geojson['properties']['categories']
-                websites = geojson['properties']['websites']
-                socials = geojson['properties']['socials']
+                categories = json.dumps(geojson['properties']['categories'])
+                websites = json.dumps(geojson['properties'].get('websites', []))
+                socials = json.dumps(geojson['properties'].get('socials', []))
                 address_obj = geojson['properties']['addresses'][0]
                 address_str = ", ".join([
                     address_obj.get('freeform', ''),
