@@ -40,7 +40,7 @@ with open(args.output_file, 'w') as output_file:
     with open(args.input_file, 'r') as file:
         for line in file:
             try:
-                data = line.strip()
+                data = line.replace(",", "")
                 geojson = json.loads(data)
 
                 coordinates = geojson['geometry']['coordinates']
