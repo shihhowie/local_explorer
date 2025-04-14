@@ -50,7 +50,7 @@ def process_geojson():
         );\n
         '''
         )
-        output_file.write(f"INSERT INTO overture_map_places (placeid, coordinates, names, categories, websites, socials, address) VALUES \n")
+        output_file.write(f"INSERT INTO overture_map_places (id, coordinates, names, categories, websites, socials, address) VALUES \n")
         with open(args.input_file, 'r') as file:
             for line in file:
                 try:
