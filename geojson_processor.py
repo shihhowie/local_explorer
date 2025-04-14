@@ -16,6 +16,7 @@
 import json
 import os 
 import argparse
+import geohash
 
 parser = argparse.ArgumentParser(description="Process a GeoJSON file.")
 parser.add_argument('-i', '--input_file', type=str, help="Path to the GeoJSON file to process")
@@ -23,10 +24,16 @@ parser.add_argument('-o', '--output_file', type=str, help="Path to the sql outpu
 
 args = parser.parse_args()
 
+def get_geohash(coordinates):
+    lat, lon = coordinates[0], coordinates[1]
+    geohash_code = geohash.encode(lat, lon, precision=8)
+    return geohash_code
+
 def parse_json(line):
     # line = line.replace("None", "NA")
     geojson = json.loads(line.strip().rstrip(','))
     coordinates = geojson['geometry']['coordinates']
+    geohash_code = get_geohash(coordinates)
     placeid = geojson['properties']['id']
     names = geojson['properties']['names']['primary'].replace("'", "''")
     categories = json.dumps(geojson['properties']['categories']).replace("'", "''")
@@ -34,7 +41,7 @@ def parse_json(line):
     socials = json.dumps(geojson['properties'].get('socials', [])).replace("'", "''")
     address_obj = json.dumps(geojson['properties']['addresses'][0]).replace("'", "''")
 
-    return f"('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n"
+    return f"('{placeid}','{coordinates}','{geohash_code}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n"
 
 def process_geojson():
     fail_counter = 0
@@ -42,6 +49,7 @@ def process_geojson():
         output_file.write('''CREATE TABLE IF NOT EXISTS overture_map_places (
             id TEXT PRIMARY KEY,
             coordinates TEXT,
+            geohash TEXT,
             names TEXT,
             categories TEXT,
             websites TEXT,
@@ -50,7 +58,7 @@ def process_geojson():
         );\n
         '''
         )
-        output_file.write(f"INSERT INTO overture_map_places (id, coordinates, names, categories, websites, socials, address) VALUES \n")
+        output_file.write(f"INSERT INTO overture_map_places (id, coordinates, geohash, names, categories, websites, socials, address) VALUES \n")
         with open(args.input_file, 'r') as file:
             for line in file:
                 try:
