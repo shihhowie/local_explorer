@@ -16,7 +16,7 @@
 import json
 import os 
 import argparse
-import geohash
+import geohash2
 
 parser = argparse.ArgumentParser(description="Process a GeoJSON file.")
 parser.add_argument('-i', '--input_file', type=str, help="Path to the GeoJSON file to process")
@@ -26,7 +26,7 @@ args = parser.parse_args()
 
 def get_geohash(coordinates):
     lat, lon = coordinates[0], coordinates[1]
-    geohash_code = geohash.encode(lat, lon, precision=8)
+    geohash_code = geohash2.encode(lat, lon, precision=8)
     return geohash_code
 
 def parse_json(line):
