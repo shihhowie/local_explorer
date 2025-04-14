@@ -73,7 +73,7 @@ def process_geojson():
             line = line.rstrip("}").rstrip("]")
             sql_line = parse_json(line)
             output_file.write(sql_line.rstrip(",\n"))
-            output_file.write(f";\n")
+            # output_file.write(f";\n")
             output_file.write(''' 
                     ON CONFLICT (id) DO UPDATE SET
                     coordinates = EXCLUDED.coordinates,
