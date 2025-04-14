@@ -39,7 +39,7 @@ def parse_json(line):
 def process_geojson():
     fail_counter = 0
     with open(args.output_file, 'w') as output_file:
-        output_file.write('''CREATE TABLE IF NOT EXISTS geojson_data (
+        output_file.write('''CREATE TABLE IF NOT EXISTS overture_map_places (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             coordinates TEXT,
             names TEXT,
