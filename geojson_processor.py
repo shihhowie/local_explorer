@@ -32,7 +32,7 @@ def parse_json(line):
     categories = json.dumps(geojson['properties']['categories'])
     websites = json.dumps(geojson['properties'].get('websites', []))
     socials = json.dumps(geojson['properties'].get('socials', []))
-    address_obj = geojson['properties']['addresses'][0]
+    address_obj = json.dumps(geojson['properties']['addresses'][0])
 
     return f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n"
 
