@@ -34,7 +34,7 @@ def parse_json(line):
     socials = json.dumps(geojson['properties'].get('socials', []))
     address_obj = geojson['properties']['addresses'][0]
 
-    print(f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n")
+    return f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n"
 
 def process_geojson():
     fail_counter = 0
