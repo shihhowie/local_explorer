@@ -64,6 +64,4 @@ def process_geojson():
             output_file.write(f";\n")
     
 if __name__ == "__main__":
-
- 
-
+    process_geojson()
