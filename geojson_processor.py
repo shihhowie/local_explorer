@@ -40,7 +40,7 @@ def process_geojson():
     fail_counter = 0
     with open(args.output_file, 'w') as output_file:
         output_file.write('''CREATE TABLE IF NOT EXISTS overture_map_places (
-            id SERIAL PRIMARY KEY,
+            id TEXT PRIMARY KEY,
             coordinates TEXT,
             names TEXT,
             categories TEXT,
