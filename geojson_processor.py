@@ -54,16 +54,19 @@ def process_geojson():
         with open(args.input_file, 'r') as file:
             for line in file:
                 try:
-                    if file.tell() == os.fstat(file.fileno()).st_size:
-                        line = line.rstrip("]}").rstrip("")
                     sql_line = parse_json(line)
                     output_file.write(sql_line)
                 except json.JSONDecodeError:
                     print(f"Skipping invalid JSON line: {line.strip()}")  
                     fail_counter += 1
                     if fail_counter>10:
-                        break  
+                        break
+            # handle last line
+            line = line.rstrip("]}")
+            sql_line = parse_json(line)
+            output_file.write(sql_line.rstrip(','))
             output_file.write(f";\n")
+        
     
 if __name__ == "__main__":
     process_geojson()
