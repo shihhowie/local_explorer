@@ -74,7 +74,16 @@ def process_geojson():
             sql_line = parse_json(line)
             output_file.write(sql_line.rstrip(",\n"))
             output_file.write(f";\n")
-        
-    
+            output_file.write(''' 
+                    ON CONFLICT (id) DO UPDATE SET
+                    coordinates = EXCLUDED.coordinates,
+                    geohash = EXCLUDED.geohash,
+                    names = EXCLUDED.names,
+                    categories = EXCLUDED.categories,
+                    websites = EXCLUDED.websites,
+                    socials = EXCLUDED.socials,
+                    address = EXCLUDED.address;
+                ''')
+            
 if __name__ == "__main__":
     process_geojson()
