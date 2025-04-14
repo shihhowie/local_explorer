@@ -34,7 +34,7 @@ def parse_json(line):
     socials = json.dumps(geojson['properties'].get('socials', []))
     address_obj = json.dumps(geojson['properties']['addresses'][0])
 
-    return f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n"
+    return f"('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n"
 
 def process_geojson():
     fail_counter = 0
@@ -50,7 +50,7 @@ def process_geojson():
         );\n
         '''
         )
-        output_file.write(f"INSERT INTO overture_map_places (placeid, coordinates, names, categories, websites, socials, address) \n")
+        output_file.write(f"INSERT INTO overture_map_places (placeid, coordinates, names, categories, websites, socials, address) VALUES \n")
         with open(args.input_file, 'r') as file:
             for line in file:
                 try:
@@ -60,7 +60,7 @@ def process_geojson():
                     print(f"Skipping invalid JSON line: {line.strip()}")  
                     fail_counter += 1
                     if fail_counter>10:
-                        break
+                        breaki 
             # handle last line
             line = line.rstrip("}").rstrip("]")
             sql_line = parse_json(line)
