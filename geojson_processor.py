@@ -64,7 +64,7 @@ def process_geojson():
             # handle last line
             line = line.rstrip("}").rstrip("]")
             sql_line = parse_json(line)
-            output_file.write(sql_line.rstrip(','))
+            output_file.write(sql_line.rstrip(",\n"))
             output_file.write(f";\n")
         
     
