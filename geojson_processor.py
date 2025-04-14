@@ -28,7 +28,7 @@ def parse_json(line):
     geojson = json.loads(line.strip().rstrip(','))
     coordinates = geojson['geometry']['coordinates']
     placeid = geojson['properties']['id']
-    names = geojson['properties']['names']['primary']
+    names = geojson['properties']['names']['primary'].replace("'", "''")
     categories = json.dumps(geojson['properties']['categories']).replace("'", "''")
     websites = json.dumps(geojson['properties'].get('websites', [])).replace("'", "''")
     socials = json.dumps(geojson['properties'].get('socials', [])).replace("'", "''")
