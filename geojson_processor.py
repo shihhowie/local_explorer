@@ -24,46 +24,45 @@ parser.add_argument('-o', '--output_file', type=str, help="Path to the sql outpu
 args = parser.parse_args()
 fail_counter = 0
 
-with open(args.output_file, 'w') as output_file:
-    output_file.write('''CREATE TABLE IF NOT EXISTS geojson_data (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        coordinates TEXT,
-        names TEXT,
-        categories TEXT,
-        websites TEXT,
-        socials TEXT,
-        address TEXT
-    );\n
-    '''
-    )
-    output_file.write(f"INSERT INTO geojson_data (placeid, coordinates, names, categories, websites, socials, address) \n")
-    with open(args.input_file, 'r') as file:
-        for line in file:
-            try:
-                # line = line.replace(",", "")
-                geojson = json.loads(line.strip())
 
-                coordinates = geojson['geometry']['coordinates']
-                placeid = geojson['properties']['id']
-                names = geojson['properties']['names']['primary']
-                categories = json.dumps(geojson['properties']['categories'])
-                websites = json.dumps(geojson['properties'].get('websites', []))
-                socials = json.dumps(geojson['properties'].get('socials', []))
-                address_obj = geojson['properties']['addresses'][0]
-                address_str = ", ".join([
-                    address_obj.get('freeform', ''),
-                    address_obj.get('locality', ''),
-                    address_obj.get('postcode', ''),
-                    address_obj.get('region', ''),
-                    address_obj.get('country', '')
-                ])
-        
-                output_file.write(f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_str}'),\n")
-            except json.JSONDecodeError:
+
+def parse_json(line):
+    # line = line.replace("None", "NA")
+    geojson = json.loads(line.strip().rstrip(','))
+    coordinates = geojson['geometry']['coordinates']
+    placeid = geojson['properties']['id']
+    names = geojson['properties']['names']['primary']
+    categories = json.dumps(geojson['properties']['categories'])
+    websites = json.dumps(geojson['properties'].get('websites', []))
+    socials = json.dumps(geojson['properties'].get('socials', []))
+    address_obj = geojson['properties']['addresses'][0]
+
+    print(f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n")
+
+def process_geojson():
+    with open(args.output_file, 'w') as output_file:
+        output_file.write('''CREATE TABLE IF NOT EXISTS geojson_data (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            coordinates TEXT,
+            names TEXT,
+            categories TEXT,
+            websites TEXT,
+            socials TEXT,
+            address TEXT
+        );\n
+        '''
+        )
+        output_file.write(f"INSERT INTO geojson_data (placeid, coordinates, names, categories, websites, socials, address) \n")
+        with open(args.input_file, 'r') as file:
+            for line in file:
+                try:
+                    sql_line = parse_json(line)
+                    output_file.write(sql_line)
+                except json.JSONDecodeError:
                     print(f"Skipping invalid JSON line: {line.strip()}")  
                     fail_counter += 1
                     if fail_counter>10:
                         break  
-        output_file.write(f";\n")
+            output_file.write(f";\n")
  
 
