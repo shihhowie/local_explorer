@@ -22,9 +22,6 @@ parser.add_argument('-i', '--input_file', type=str, help="Path to the GeoJSON fi
 parser.add_argument('-o', '--output_file', type=str, help="Path to the sql output to process")
 
 args = parser.parse_args()
-fail_counter = 0
-
-
 
 def parse_json(line):
     # line = line.replace("None", "NA")
@@ -40,6 +37,7 @@ def parse_json(line):
     print(f"VALUES ('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n")
 
 def process_geojson():
+    fail_counter = 0
     with open(args.output_file, 'w') as output_file:
         output_file.write('''CREATE TABLE IF NOT EXISTS geojson_data (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -64,5 +62,8 @@ def process_geojson():
                     if fail_counter>10:
                         break  
             output_file.write(f";\n")
+    
+if __name__ == "__main__":
+
  
 
