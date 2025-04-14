@@ -54,6 +54,8 @@ def process_geojson():
         with open(args.input_file, 'r') as file:
             for line in file:
                 try:
+                    if file.tell() == os.fstat(file.fileno()).st_size:
+                        line = line.rstrip("]}").rstrip("")
                     sql_line = parse_json(line)
                     output_file.write(sql_line)
                 except json.JSONDecodeError:
