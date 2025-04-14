@@ -29,10 +29,10 @@ def parse_json(line):
     coordinates = geojson['geometry']['coordinates']
     placeid = geojson['properties']['id']
     names = geojson['properties']['names']['primary']
-    categories = json.dumps(geojson['properties']['categories'])
-    websites = json.dumps(geojson['properties'].get('websites', []))
-    socials = json.dumps(geojson['properties'].get('socials', []))
-    address_obj = json.dumps(geojson['properties']['addresses'][0])
+    categories = json.dumps(geojson['properties']['categories']).replace("'", "''")
+    websites = json.dumps(geojson['properties'].get('websites', [])).replace("'", "''")
+    socials = json.dumps(geojson['properties'].get('socials', [])).replace("'", "''")
+    address_obj = json.dumps(geojson['properties']['addresses'][0]).replace("'", "''")
 
     return f"('{placeid}','{coordinates}','{names}','{categories}','{websites}','{socials}','{address_obj}'),\n"
 
