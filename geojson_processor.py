@@ -25,7 +25,7 @@ parser.add_argument('-o', '--output_file', type=str, help="Path to the sql outpu
 args = parser.parse_args()
 
 def get_geohash(coordinates):
-    lat, lon = coordinates[0], coordinates[1]
+    lat, lon = coordinates[1], coordinates[0]
     geohash_code = geohash2.encode(lat, lon, precision=8)
     return geohash_code
 
