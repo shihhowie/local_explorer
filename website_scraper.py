@@ -82,7 +82,7 @@ def process():
             names TEXT,
             gmap_id TEXT
         );\n''')
-        output_file.write(f"INSERT INTO overture_map_places (id, names, gmap_id) VALUES \n")
+        output_file.write(f"INSERT INTO overture_to_gmap (id, names, gmap_id) VALUES \n")
         rsp = []
         counter = 0
         for place in places:
