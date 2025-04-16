@@ -88,7 +88,7 @@ def process():
         for place in places:
             req = build_req(place)
             if get_gmap_id(req):
-                line_val = f"({req['id']},{req['name']},{req['gmap_id']})"
+                line_val = f"('{req['id']}','{req['name']}','{req['gmap_id']}')"
                 output_file.write(f'{line_val},\n')
         output_file.write(''' 
                     ON CONFLICT (id) DO UPDATE SET
