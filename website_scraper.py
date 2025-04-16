@@ -93,12 +93,13 @@ def process():
                 if counter>0:
                     line_val = ",\n"+line_val
                 output_file.write(f'{line_val}')
+                counter += 1
         output_file.write(''' 
                     ON CONFLICT (id) DO UPDATE SET
                     names = EXCLUDED.names,
                     gmap_id = EXCLUDED.gmap_id;
                 ''')
-                counter += 1
+                
         print("processed", counter)
 
 if __name__=="__main__":
