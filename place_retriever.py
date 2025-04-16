@@ -124,9 +124,11 @@ def get_places(curr_location, radius):
     geohashes = get_geohashes(bounding_box, prec)
     # make query to psql for the places in the geohashes
     rows = fetch_places(geohashes)
-    # return fine_tune(curr_location, rows, radius)
+    print("rough fetch ", len(rows))
+    rows = fine_tune(curr_location, rows, radius)
+    print("fine tune ", len(rows))
     return rows
 
 if __name__ == "__main__":
     places = get_places((51.52140, -0.11142), 1)
-    print(places)
+    # print(places)
