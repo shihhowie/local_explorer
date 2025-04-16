@@ -106,6 +106,7 @@ def fine_tune(coordinates, rows, radius):
     lat, lon = coordinates[0], coordinates[1]
     res = []
     for row in rows:
+        print(row[1], type(row[1]))
         lon2, lat2 = row[1]
         dlat = radians(lat2 - lat)
         dlon = radians(lon2 - lon)
