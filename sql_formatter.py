@@ -15,8 +15,8 @@ def check_quote():
         with open(args.output_file, "w") as out_f:
             for line in f:
                 if line[0]=="(":
+                    line = line.rstrip(",\n")
                     if isbody:
-                        line = line.rstrip(",\n")
                         line = ",\n"+line
                     quote_loc = line.find("'")
                     while quote_loc > -1:
