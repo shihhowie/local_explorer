@@ -13,6 +13,8 @@ GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 parser = argparse.ArgumentParser(description="enrich data with gmap id.")
 parser.add_argument('-o', '--output_file', type=str, help="Path to the sql output to process")
 
+args = parser.parse_args()
+
 def get_url(rsps):
     urls = []
     for rsp in rsps:
@@ -31,7 +33,7 @@ def get_gmap_id(req):
     if rsp.status_code==200:
         data =rsp.json()
         if not data['candidates']:
-            print('candidate empty for', req['name'])
+            print('candidate empty for', req['name'], params['locationbias'])
             return False
         gmap_id = data['candidates'][0].get('place_id', None)
         if gmap_id:
@@ -73,12 +75,7 @@ def fetch_places():
 
 def process():
     places = fetch_places()
-    rsp = []
-    for place in places:
-        req = build_req(place)
-        if get_gmap_id(req):
-            line_val = f"({req['id']},{req['name']},{req['gmap_id']})"
-            rsp.append(line_val)
+   
     with open(args.output_file, 'w') as output_file:
         output_file.write('''CREATE TABLE IF NOT EXISTS overture_to_gmap (
             id TEXT PRIMARY KEY,
@@ -86,7 +83,13 @@ def process():
             gmap_id TEXT
         );\n''')
         output_file.write(f"INSERT INTO overture_map_places (id, name, gmap_id) VALUES \n")
-        output_file.write(f',\n'.join(rsp))
+        rsp = []
+        counter = 0
+        for place in places:
+            req = build_req(place)
+            if get_gmap_id(req):
+                line_val = f"({req['id']},{req['name']},{req['gmap_id']})"
+                output_file.write(f'{line_val},\n')
         output_file.write(''' 
                     ON CONFLICT (id) DO UPDATE SET
                     names = EXCLUDED.names,
