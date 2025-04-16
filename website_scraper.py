@@ -89,7 +89,7 @@ def process():
             req = build_req(place)
             if get_gmap_id(req):
                 name = req['name'].replace("'", "''")
-                line_val = f"('{req['id']}','{req['name']}','{req['gmap_id']}')"
+                line_val = f"('{req['id']}','{name}','{req['gmap_id']}')"
                 if counter>0:
                     line_val = ",\n"+line_val
                 output_file.write(f'{line_val}')

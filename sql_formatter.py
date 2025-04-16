@@ -14,10 +14,8 @@ def check_quote():
         isbody = False
         with open(args.output_file, "w") as out_f:
             for line in f:
-                if line.find("overture_map_places")>-1:
-                    line = line.replace("overture_map_places", "overture_to_gmap")
                 if line[0]=="(":
-                    line = line.rstrip(",\n")
+                    line = line.strip(",\n")
                     if isbody:
                         line = ",\n"+line
                     quote_loc = line.find("'")
