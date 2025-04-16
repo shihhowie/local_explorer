@@ -72,6 +72,7 @@ def fetch_places(geohashes):
                 host=DB_HOST,
                 port=DB_PORT
             )
+        cur = conn.cursor()
         geo_hashes_str = ",".join(geohashes)
         sql = f"""
             select 
@@ -96,7 +97,6 @@ def fetch_places(geohashes):
         cur.execute(sql)
         rows = cur.fetchall()
         return rows
-        results = []
         
     except Exception as e:
         print(f"Error connecting to the database: {e}")
