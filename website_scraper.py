@@ -65,7 +65,7 @@ def fetch_places():
                 port=DB_PORT
             )
     cur = conn.cursor()
-    sql = """select id, coordinates, name
+    sql = """select id, coordinates, names
                 from overture_map_places
                 where categories::json->>'primary' like '%coffee%';
             """
@@ -79,10 +79,10 @@ def process():
     with open(args.output_file, 'w') as output_file:
         output_file.write('''CREATE TABLE IF NOT EXISTS overture_to_gmap (
             id TEXT PRIMARY KEY,
-            name TEXT,
+            names TEXT,
             gmap_id TEXT
         );\n''')
-        output_file.write(f"INSERT INTO overture_map_places (id, name, gmap_id) VALUES \n")
+        output_file.write(f"INSERT INTO overture_map_places (id, names, gmap_id) VALUES \n")
         rsp = []
         counter = 0
         for place in places:
