@@ -116,7 +116,7 @@ def fine_tune(coordinates, rows, radius):
         a = sin(dlat/2)**2 + cos(radians(lat)) * cos(radians(lat2)) * sin(dlon/2)**2
         c = 2 * atan2(sqrt(a), sqrt(1-a))
         distance = R * c
-        if distance <= radius:
+        if distance > radius:
             print("filtered out", distance)
             res.append(row)
     return res
