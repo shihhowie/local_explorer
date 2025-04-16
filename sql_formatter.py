@@ -15,7 +15,7 @@ def check_quote():
         with open(args.output_file, "w") as out_f:
             for line in f:
                 if line.find("overture_map_places")>-1:
-                    line.replace("overture_map_places", "overture_to_gmap")
+                    line = line.replace("overture_map_places", "overture_to_gmap")
                 if line[0]=="(":
                     line = line.rstrip(",\n")
                     if isbody:
