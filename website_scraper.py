@@ -1,4 +1,5 @@
 import requests
+import psycopg2
 import argparse
 import os 
 
