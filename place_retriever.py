@@ -24,7 +24,8 @@ def get_bounding_box(curr_location, r):
         if r > dlat:
             prec-=1
             break
-    print(prec+1)
+    # print(prec+1)
+    print("search bounding box", prec, geohash_cell_size[prec])
     lat, lon = curr_location[0], curr_location[1]
 
     C = 40075
@@ -107,7 +108,6 @@ def fine_tune(coordinates, rows, radius):
     R = 6471
     res = []
     for row in rows:
-        print(row[1], type(row[1]))
         coord = row[1].strip('[]').replace(' ','').split(",")
         lon2, lat2 = float(coord[0]), float(coord[1])
         dlat = radians(lat2 - lat)
@@ -117,6 +117,7 @@ def fine_tune(coordinates, rows, radius):
         c = 2 * atan2(sqrt(a), sqrt(1-a))
         distance = R * c
         if distance <= radius:
+            print("filtered out", distance)
             res.append(row)
     return res
 
