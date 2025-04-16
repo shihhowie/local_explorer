@@ -15,7 +15,7 @@ def check_quote():
                 if line[0]=="(":
                     quote_loc = line.find("'")
                     while quote_loc > -1:
-                        print(quote_loc)
+                        # print(quote_loc)
                         if line[quote_loc-1] not in ("(", ",") and line[quote_loc+1] not in (',', ')'):
                             line = line[:quote_loc]+"'"+line[quote_loc:]
                             quote_loc += 1
