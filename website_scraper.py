@@ -73,7 +73,7 @@ def process():
     for place in places:
         req = build_req(place)
         if get_gmap_id(req):
-            line_val = f"({req["id"]},{req["name"]},{req["gmap_id"]})"
+            line_val = f"({req['id']},{req['name']},{req['gmap_id']})"
             rsp.append(line_val)
     with open(args.output_file, 'w') as output_file:
         output_file.write('''CREATE TABLE IF NOT EXISTS overture_to_gmap (
