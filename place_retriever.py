@@ -104,6 +104,7 @@ def fetch_places(geohashes):
 
 def fine_tune(coordinates, rows, radius):
     lat, lon = coordinates[0], coordinates[1]
+    R = 6471
     res = []
     for row in rows:
         print(row[1], type(row[1]))
