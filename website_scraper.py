@@ -30,6 +30,9 @@ def get_gmap_id(req):
     rsp = requests.get(url, params=params)
     if rsp.status_code==200:
         data =rsp.json()
+        if not data['candidates']:
+            print('candidate empty for ' req['name'])
+            return False
         gmap_id = data['candidates'][0].get('place_id', None)
         if gmap_id:
             req['gmap_id'] = gmap_id
