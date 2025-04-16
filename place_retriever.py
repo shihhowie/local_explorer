@@ -5,7 +5,7 @@ from math import *
 DB_NAME="testdb"
 DB_USER="howardshih"
 DB_PASSWORD="howardshih"
-
+DB_PORT="5432"
 DB_HOST="database-1.c12cmowoyxgf.eu-north-1.rds.amazonaws.com"
 
 geohash_cell_size = {
