@@ -10,9 +10,14 @@ args = parser.parse_args()
 
 def check_quote():
     with open(args.input_file) as f:
+        prev_line = None
+        isbody = False
         with open(args.output_file, "w") as out_f:
             for line in f:
                 if line[0]=="(":
+                    if isbody:
+                        line = line.rstrip(",\n")
+                        line = ",\n"+line
                     quote_loc = line.find("'")
                     while quote_loc > -1:
                         # print(quote_loc)
@@ -20,6 +25,7 @@ def check_quote():
                             line = line[:quote_loc]+"'"+line[quote_loc:]
                             quote_loc += 1
                         quote_loc = line.find("'", quote_loc+1)
+                    isbody = True
                 out_f.write(line)
 
 if __name__=="__main__":
