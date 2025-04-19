@@ -97,6 +97,8 @@ def fetch_places(geohashes):
             """
         cur.execute(sql)
         rows = cur.fetchall()
+        cur.close()
+        conn.close()
         return rows
         
     except Exception as e:

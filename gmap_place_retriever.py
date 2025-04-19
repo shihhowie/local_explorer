@@ -15,6 +15,16 @@ parser.add_argument('-o', '--output_file', type=str, help="Path to the sql outpu
 
 args = parser.parse_args()
 
+conn = psycopg2.connect(
+                dbname=DB_NAME,
+                user=DB_USER,
+                password=DB_PASSWORD,
+                host=DB_HOST,
+                port=DB_PORT
+            )
+cur = conn.cursor()
+
+
 def get_url(rsps):
     urls = []
     for rsp in rsps:
@@ -57,23 +67,44 @@ def build_req(place_rsp):
     return {"id":id, "name": name, "params": req}
 
 def fetch_places():
-    conn = psycopg2.connect(
-                dbname=DB_NAME,
-                user=DB_USER,
-                password=DB_PASSWORD,
-                host=DB_HOST,
-                port=DB_PORT
-            )
-    cur = conn.cursor()
-    sql = """select id, coordinates, names
+    
+    sql = """
+            select id, coordinates, names
                 from overture_map_places
                 where categories::json->>'primary' like '%coffee%';
             """
     cur.execute(sql)
     rows = cur.fetchall()
+    cur.close()
+    conn.close()
+    return rows
+
+def fetch_place_ids():
+    sql = """
+            select id, names, gmap_id
+                from overture_to_gmap
+                limit 5;
+            """
+    cur.execute(sql)
+    rows = cur.fetchall()
+    cur.close()
+    conn.close()
     return rows
 
 def process():
+    place_ids = fetch_place_ids()
+    for place in place_ids:
+        print(place)
+        gmap_id = place[2]
+        req = {
+            "plae_id": gmap_id,
+            "fields": "place_id,rating",
+            "locationbias": f"point:{lat},{lon}",
+            "key": GOOGLE_API_KEY
+        }
+
+
+def build_gmap_place_id_fetch_script():
     places = fetch_places()
    
     with open(args.output_file, 'w') as output_file:
