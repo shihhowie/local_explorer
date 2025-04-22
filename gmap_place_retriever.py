@@ -152,7 +152,7 @@ def process():
             review_sql = generate_sql("gmap_reviews", reviews_schema, reviews_input)
             f.write(review_sql)
         if photos_input:
-            photo_sql = generate_sql("gmap_photos", photos_schema, photos_input)
+            photo_sql = generate_sql("gmap_photos", photos_schema, photos_input, overwrite=False)
             f.write(photo_sql)
 
 def build_gmap_place_id_fetch_script():
