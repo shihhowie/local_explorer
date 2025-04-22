@@ -85,7 +85,7 @@ def fetch_places():
     return rows
 
 def fetch_place_ids():
-    conn, curr = connect_to_db()
+    conn, cur = connect_to_db()
     sql = """
             select id, names, gmap_id
                 from overture_to_gmap
