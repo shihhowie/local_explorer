@@ -3,6 +3,8 @@ import psycopg2
 import argparse
 import os 
 
+from sql_util import generate_sql
+
 DB_NAME="testdb"
 DB_USER="howardshih"
 DB_PASSWORD="howardshih"
@@ -15,14 +17,16 @@ parser.add_argument('-o', '--output_file', type=str, help="Path to the sql outpu
 
 args = parser.parse_args()
 
-conn = psycopg2.connect(
-                dbname=DB_NAME,
-                user=DB_USER,
-                password=DB_PASSWORD,
-                host=DB_HOST,
-                port=DB_PORT
-            )
-cur = conn.cursor()
+def connect_to_db():
+    conn = psycopg2.connect(
+                    dbname=DB_NAME,
+                    user=DB_USER,
+                    password=DB_PASSWORD,
+                    host=DB_HOST,
+                    port=DB_PORT
+                )
+    cur = conn.cursor()
+    return conn, curr
 
 
 def get_url(rsps):
@@ -67,7 +71,7 @@ def build_req(place_rsp):
     return {"id":id, "name": name, "params": req}
 
 def fetch_places():
-    
+    conn, curr = connect_to_db()
     sql = """
             select id, coordinates, names
                 from overture_map_places
@@ -80,6 +84,7 @@ def fetch_places():
     return rows
 
 def fetch_place_ids():
+    conn, curr = connect_to_db()
     sql = """
             select id, names, gmap_id
                 from overture_to_gmap
@@ -90,19 +95,60 @@ def fetch_place_ids():
     cur.close()
     conn.close()
     return rows
+ 
 
 def process():
-    place_ids = fetch_place_ids()
+    # place_ids = fetch_place_ids()
+    place_ids = [("08f194ad3209059d0305cc779903dff2", "WatchHouse Somerset House", "ChIJD3EFm1gFdkgRiPW6GgLcdM0")]
+    batch_size = 128
+    i = 0
+
+
+    reviews_schema = {"gmap_id": {"dtype": "TEXT"},
+                "avg_rating": {"dtype": "DOUBLE"},
+                "text": {"dtype": "TEXT"},
+                "score": {"dtype": "DOUBLE"}}
+
+    photos_schema = {"gmap_id": {"dtype": "TEXT"},
+                "photo_ref": {"dtype": "TEXT"}}
+
+    reviews_input = []
+    photos_input = []
     for place in place_ids:
         print(place)
         gmap_id = place[2]
-        req = {
-            "plae_id": gmap_id,
-            "fields": "place_id,rating",
-            "locationbias": f"point:{lat},{lon}",
+        params = {
+            "place_id": gmap_id,
+            "fields": "rating,reviews,photos",
             "key": GOOGLE_API_KEY
         }
+        url = "https://maps.googleapis.com/maps/api/place/details/json"
+        rsp = requests.get(url, params=params)
+        if rsp.status_code==200:
+            rsp = rsp.json()
+            if rsp['status']!='OK':
+                continue
+            data = rsp['result']
+            # print(data)
+            avg_rating = data['rating']
+            for review in data['reviews']:
+                text = review['text']
+                review_score = review['rating']
+                reviews_input.append((gmap_id, avg_rating, text, review_score))
 
+            for photo in data['photos']:
+                photos_input.append((gmap_id, photo['photo_reference']))
+           
+        i+=1
+        if i%batch_size==0:
+            generate_sql("gamp_reviews", reviews_schema, reviews_input)
+            generate_sql("gamp_photos", photos_schema, photos_input)
+            reviews_input = []
+            photos_input = []
+    if reviews_input:
+        generate_sql("gamp_reviews", reviews_schema, reviews_input)
+    if photos_input:
+        generate_sql("gamp_photos", photos_schema, photos_input)
 
 def build_gmap_place_id_fetch_script():
     places = fetch_places()
