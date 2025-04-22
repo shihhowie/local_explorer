@@ -127,16 +127,19 @@ def process():
             rsp = rsp.json()
             if rsp['status']!='OK':
                 continue
-            data = rsp['result']
-            # print(data)
-            avg_rating = data['rating']
-            for review in data['reviews']:
-                text = review['text']
-                review_score = review['rating']
-                reviews_input.append((gmap_id, avg_rating, text, review_score))
+            try: 
+                data = rsp['result']
+                # print(data)
+                avg_rating = data['rating']
+                for review in data['reviews']:
+                    text = review['text']
+                    review_score = review['rating']
+                    reviews_input.append((gmap_id, avg_rating, text, review_score))
 
-            for photo in data['photos']:
-                photos_input.append((gmap_id, photo['photo_reference']))
+                for photo in data['photos']:
+                    photos_input.append((gmap_id, photo['photo_reference']))
+            except Exception as e:
+                print("error: ", e)
         i+=1
         if i%batch_size==0:
             print(f"batch {i//batch_size} * ", batch_size)
