@@ -72,7 +72,7 @@ def build_req(place_rsp):
     return {"id":id, "name": name, "params": req}
 
 def fetch_places():
-    conn, curr = connect_to_db()
+    conn, cur = connect_to_db()
     sql = """
             select id, coordinates, names
                 from overture_map_places
