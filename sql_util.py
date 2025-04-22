@@ -10,6 +10,7 @@ def generate_sql(table_name, schema, input_list, overwrite=True):
     sql_str = f"CREATE TABLE IF NOT EXISTS {table_name} (\n"
     id_col = None
     dtypes = []
+    first = True
     for col in schema:
         dtype = schema[col]['dtype']
         dtypes.append(dtype)
@@ -17,9 +18,11 @@ def generate_sql(table_name, schema, input_list, overwrite=True):
         line = f"{col} {dtype}"
         if is_key: 
             id_col = col
-            line += " PRIMARY KEY,\n"
+            line += " PRIMARY KEY"
+        if first:
+            first = False
         else:
-            line += ",\n"
+            line = ",\n"+line
         sql_str += line
     sql_str+=");\n"
     
