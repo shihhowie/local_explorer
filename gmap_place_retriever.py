@@ -2,6 +2,7 @@ import requests
 import psycopg2
 import argparse
 import os 
+import hashlib
 
 from sql_util import generate_sql
 
@@ -103,14 +104,13 @@ def process():
     batch_size = 128
     i = 0
 
-
-    reviews_schema = {"gmap_id": {"dtype": "TEXT"},
+    reviews_schema = {"gmap_id": {"dtype": "TEXT", "key": True},
                 "avg_rating": {"dtype": "double precision"},
-                "text": {"dtype": "TEXT"},
+                "text": {"dtype": "TEXT", "key": True},
                 "score": {"dtype": "double precision"}}
 
-    photos_schema = {"gmap_id": {"dtype": "TEXT"},
-                "photo_ref": {"dtype": "TEXT"}}
+    photos_schema = {"gmap_id": {"dtype": "TEXT", "key": True},
+                "photo_ref": {"dtype": "TEXT", "key": True}}
 
     reviews_input = []
     photos_input = []

@@ -8,22 +8,18 @@ def format_for_postgresql(input_string):
 def generate_sql(table_name, schema, input_list, overwrite=True):
     # scheuma should map colname to type
     sql_str = f"CREATE TABLE IF NOT EXISTS {table_name} (\n"
-    id_col = None
     dtypes = []
-    first = True
+    primary_keys = []
     for col in schema:
         dtype = schema[col]['dtype']
         dtypes.append(dtype)
         is_key = schema[col].get('key', False)
-        line = f"{col} {dtype}"
+        line = f"{col} {dtype},\n"
         if is_key: 
-            id_col = col
-            line += " PRIMARY KEY"
-        if first:
-            first = False
-        else:
-            line = ",\n"+line
+            primary_keys.append(col)
         sql_str += line
+    if primary_keys:
+        sql_str += f"PRIMARY KEY ({','.join(primary_keys)})\n"
     sql_str+=");\n"
     
     sql_str += f"INSERT INTO {table_name} ({','.join([col for col in schema])}) VALUES \n"
@@ -38,11 +34,11 @@ def generate_sql(table_name, schema, input_list, overwrite=True):
             line = ",\n"+line
         sql_str += line
 
-    if overwrite and id_col is not None:
-        sql_str += f"\nON CONFLICT ({id_col}) DO UPDATE SET\n"
+    if overwrite and primary_keys:
+        sql_str += f"\nON CONFLICT ({','.join(primary_keys)}) DO UPDATE SET\n"
         first = True
         for col in schema:
-            if col==id_col:
+            if col in primary_keys:
                 continue
             line = f"{col} = EXCLUDED.{col}"
             if first:
@@ -50,6 +46,8 @@ def generate_sql(table_name, schema, input_list, overwrite=True):
             else:
                 line = ",\n"+line
             sql_str += line
+    elif primary_keys:
+        sql_str += f"\nON CONFLICT ({','.join(primary_keys)}) DO NOTHING"
     sql_str += ";\n"
     return sql_str
 
