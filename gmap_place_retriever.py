@@ -27,7 +27,7 @@ def connect_to_db():
                     port=DB_PORT
                 )
     cur = conn.cursor()
-    return conn, curr
+    return conn, cur
 
 
 def get_url(rsps):
