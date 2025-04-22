@@ -138,17 +138,22 @@ def process():
 
             for photo in data['photos']:
                 photos_input.append((gmap_id, photo['photo_reference']))
-           
         i+=1
         if i%batch_size==0:
-            generate_sql("gamp_reviews", reviews_schema, reviews_input)
-            generate_sql("gamp_photos", photos_schema, photos_input)
+            review_sql = generate_sql("gmap_reviews", reviews_schema, reviews_input)
+            photo_sql = generate_sql("gmap_photos", photos_schema, photos_input)
             reviews_input = []
             photos_input = []
-    if reviews_input:
-        generate_sql("gamp_reviews", reviews_schema, reviews_input)
-    if photos_input:
-        generate_sql("gamp_photos", photos_schema, photos_input)
+            with open('write_place_detail_sql.sql', 'w') as f:
+                f.write(review_sql)
+                f.write(photo_sql)
+    with open('write_place_detail_sql.sql', 'w') as f:
+        if reviews_input:
+            review_sql = generate_sql("gamp_reviews", reviews_schema, reviews_input)
+            f.write(review_sql)
+        if photos_input:
+            photo_sql = generate_sql("gamp_photos", photos_schema, photos_input)
+            f.write(photo_sql)
 
 def build_gmap_place_id_fetch_script():
     places = fetch_places()

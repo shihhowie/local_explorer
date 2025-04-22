@@ -48,7 +48,7 @@ def generate_sql(table_name, schema, input_list, overwrite=True):
                 line = ",\n"+line
             sql_str += line
     sql_str += ";\n"
-    print(sql_str)
+    return sql_str
 
 if __name__=="__main__":
     schema = {"gmap_id": {"dtype": "TEXT", "key": False},
