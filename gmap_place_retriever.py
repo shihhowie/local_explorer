@@ -88,8 +88,7 @@ def fetch_place_ids():
     conn, cur = connect_to_db()
     sql = """
             select id, names, gmap_id
-                from overture_to_gmap
-                limit 5;
+                from overture_to_gmap;
             """
     cur.execute(sql)
     rows = cur.fetchall()
