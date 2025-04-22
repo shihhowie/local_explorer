@@ -99,8 +99,8 @@ def fetch_place_ids():
  
 
 def process():
-    # place_ids = fetch_place_ids()
-    place_ids = [("08f194ad3209059d0305cc779903dff2", "WatchHouse Somerset House", "ChIJD3EFm1gFdkgRiPW6GgLcdM0")]
+    place_ids = fetch_place_ids()
+    # place_ids = [("08f194ad3209059d0305cc779903dff2", "WatchHouse Somerset House", "ChIJD3EFm1gFdkgRiPW6GgLcdM0")]
     batch_size = 128
     i = 0
 
@@ -140,6 +140,7 @@ def process():
                 photos_input.append((gmap_id, photo['photo_reference']))
         i+=1
         if i%batch_size==0:
+            print(f"batch {i//batch_size} * ", batch_size)
             review_sql = generate_sql("gmap_reviews", reviews_schema, reviews_input)
             photo_sql = generate_sql("gmap_photos", photos_schema, photos_input)
             reviews_input = []
