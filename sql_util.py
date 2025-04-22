@@ -23,7 +23,7 @@ def generate_sql(table_name, schema, input_list, overwrite=True):
         sql_str += line
     sql_str+=");\n"
     
-    sql_str += f"INSERT INTO {table_name} ({",".join([col for col in schema])}) VALUES \n"
+    sql_str += f"INSERT INTO {table_name} ({','.join([col for col in schema])}) VALUES \n"
     first = True
     for input in input_list:
         formatted_input = [format_for_postgresql(x) if dtypes[i]=='TEXT' else str(x) for i, x in enumerate(input)]
