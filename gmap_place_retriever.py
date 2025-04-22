@@ -105,9 +105,9 @@ def process():
 
 
     reviews_schema = {"gmap_id": {"dtype": "TEXT"},
-                "avg_rating": {"dtype": "DOUBLE"},
+                "avg_rating": {"dtype": "double precision"},
                 "text": {"dtype": "TEXT"},
-                "score": {"dtype": "DOUBLE"}}
+                "score": {"dtype": "double precision"}}
 
     photos_schema = {"gmap_id": {"dtype": "TEXT"},
                 "photo_ref": {"dtype": "TEXT"}}
