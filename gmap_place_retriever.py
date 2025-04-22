@@ -147,10 +147,10 @@ def process():
             photo_sql = generate_sql("gmap_photos", photos_schema, photos_input)
             reviews_input = []
             photos_input = []
-            with open('write_place_detail_sql.sql', 'w') as f:
+            with open('write_place_detail_sql.sql', 'a') as f:
                 f.write(review_sql)
                 f.write(photo_sql)
-    with open('write_place_detail_sql.sql', 'w') as f:
+    with open('write_place_detail_sql.sql', 'a') as f:
         if reviews_input:
             review_sql = generate_sql("gmap_reviews", reviews_schema, reviews_input)
             f.write(review_sql)
