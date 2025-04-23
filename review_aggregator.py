@@ -46,5 +46,5 @@ def gather_reviews(place_ids):
 
 if __name__=="__main__":
     places = get_places((51.52140, -0.11142), 0.1)
-    place_ids = [x[0] for x in places]
+    place_ids = [x[6] for x in places]
     gather_reviews(place_ids)

@@ -77,13 +77,13 @@ def fetch_places(geohashes):
         geo_hashes_str = ",".join(geohashes)
         sql = f"""
             select 
-                b.id,
                 b.names,
                 b.coordinates, 
                 b.categories, 
                 b.websites, 
                 b.socials, 
-                b.address
+                b.address,
+                b.id
             from 
             (   select 
                 id 
