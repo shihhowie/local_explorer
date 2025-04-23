@@ -31,7 +31,7 @@ def gather_reviews(place_ids):
             names, a.gmap_id, avg(avg_rating) as rating, string_agg(b.text, '|') as review 
             (select id, names, gmap_id
                 from overture_to_gmap
-                where id in ({place_ids_str}) a
+                where id in ({place_ids_str})) a
             left join
             (select gmap_id, avg_rating, text 
             from gmap_reviews) b
