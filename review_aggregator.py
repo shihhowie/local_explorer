@@ -25,12 +25,13 @@ def connect_to_db():
 
 def gather_reviews(place_ids):
     conn, cur = connect_to_db()
+    place_ids_str = ",".join(['{x}' for x in place_ids])
     sql = f"""
             select
             names, a.gmap_id, avg_rating, string_agg(text, ';')
             (select id, names, gmap_id
                 from overture_to_gmap
-                where id in ({','.join(place_ids)})) a
+                where id in ({place_ids_str}) a
             left join
             (select gmap_id, avg_rating, text 
             from gmap_reviews) b
