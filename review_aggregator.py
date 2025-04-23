@@ -3,7 +3,7 @@ import argparse
 import os 
 
 from sql_util import generate_sql
-from place_retriever import get_place
+from place_retriever import get_places
 
 DB_NAME="testdb"
 DB_USER="howardshih"
