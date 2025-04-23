@@ -28,7 +28,7 @@ def gather_reviews(place_ids):
     place_ids_str = ",".join([f"'{x}'" for x in place_ids])
     sql = f"""
             select
-            names, a.gmap_id, avg_rating, string_agg(text, ';')
+            names, a.gmap_id, avg(avg_rating) as rating, string_agg(b.text, '|') as review 
             (select id, names, gmap_id
                 from overture_to_gmap
                 where id in ({place_ids_str}) a
