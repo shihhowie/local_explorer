@@ -5,9 +5,11 @@ def format_for_postgresql(input_string):
     formatted_string = formatted_string.replace("\n", " ")
     return f"'{formatted_string}'"
 
-def generate_sql(table_name, schema, input_list, overwrite=True):
+def generate_sql(table_name, schema, input_list, overwrite=True, prefix=True):
     # scheuma should map colname to type
-    sql_str = f"CREATE TABLE IF NOT EXISTS {table_name} (\n"
+    sql_str = ""
+    if prefix:
+        sql_str += f"CREATE TABLE IF NOT EXISTS {table_name} (\n"
     dtypes = []
     primary_keys = []
     for col in schema:
@@ -17,10 +19,12 @@ def generate_sql(table_name, schema, input_list, overwrite=True):
         line = f"{col} {dtype},\n"
         if is_key: 
             primary_keys.append(col)
-        sql_str += line
-    if primary_keys:
+        if prefix:
+            sql_str += line
+    if prefix and primary_keys:
         sql_str += f"PRIMARY KEY ({','.join(primary_keys)})\n"
-    sql_str+=");\n"
+    if prefix:
+        sql_str+=");\n"
     
     sql_str += f"INSERT INTO {table_name} ({','.join([col for col in schema])}) VALUES \n"
     first = True
