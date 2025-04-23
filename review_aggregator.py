@@ -25,7 +25,7 @@ def connect_to_db():
 
 def gather_reviews(place_ids):
     conn, cur = connect_to_db()
-    place_ids_str = ",".join([f'{x}' for x in place_ids])
+    place_ids_str = ",".join([f"'{x}'" for x in place_ids])
     sql = f"""
             select
             names, a.gmap_id, avg_rating, string_agg(text, ';')
