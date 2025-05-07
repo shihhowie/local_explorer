@@ -3,5 +3,6 @@ __pycache__/*
 *.sql
 
 local_model/*
+local_data/*
 
 .DS_Store
