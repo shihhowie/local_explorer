@@ -1,6 +1,92 @@
 import plotly.graph_objects as go 
+from math import *
+import geohash2
 
-def visualize_path(paths, node2coord):
+
+def visualize_segment(segment2coords, selected=None):
+    fig = go.Figure()
+
+    for segment_id, coords in segment2coords.items():
+        lats += [coords[1] for node in coords]
+        lons += [coords[0] for node in coords]
+
+        color = "blue" if segment_id!=selected else "red"
+        width = 2 if segment_id!=selected else 4
+
+        fig.add_trace(go.Scattermapbox(
+            lat=edge_lats,
+            lon=edge_lons,
+            mode="lines",
+            line=dict(width=width, color=color),
+            name=f"Segment {segment_id}"
+        ))
+    fig.update_layout(
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=51.515, lon=-0.118),
+            zoom=14
+        ),
+        margin={"r":0,"t":0,"l":0,"b":0}
+    )
+    fig.show()
+
+
+def visualize_path(fig, coords, node_ids=None):
+    node_lats = []
+    node_lons = []
+    edge_lats = []
+    edge_lons = []
+
+    node_lats += [coords[1] for node in coords]
+    node_lons += [coords[0] for node in coords]
+    if not node_ids:
+        node_ids = range(len(node_lats))
+    
+
+    # Create edges
+    for i in range(1,len(coords)):
+        A = coords[i-1]
+        B = coords[i]
+        lonA, latA = A
+        lonB, latB = B
+        edge_lats += [latA, latB, None] 
+        edge_lons += [lonA, lonB, None]
+    # Create the map
+
+    # Add edges
+
+    fig.add_trace(go.Scattermapbox(
+        lat=edge_lats,
+        lon=edge_lons,
+        mode="lines",
+        line=dict(width=5, color='red'),
+        name=f"Path Edge"
+    ))
+
+    # Add nodes
+    fig.add_trace(go.Scattermapbox(
+        lat=node_lats,
+        lon=node_lons,
+        mode="markers+text",
+        marker=dict(size=12, color='red'),
+        text=[f"Node {node}" for node in node_ids],
+        name=f"Path Node"
+    ))
+
+    # Set map layout
+    fig.update_layout(
+        mapbox=dict(
+            style="open-street-map",
+            center=dict(lat=51.515, lon=-0.118),
+            zoom=15
+        ),
+        margin={"r":0,"t":0,"l":0,"b":0}
+    )
+
+    fig.show()
+
+
+def visualize_paths(paths, node2coord):
     # Create a scatter plot for nodes
     node_lats = []
     node_lons = []
@@ -63,3 +149,34 @@ def visualize_path(paths, node2coord):
     )
 
     fig.show()
+
+def find_nearest_node(lon, lat, geohash2node, node2coord):
+    geohash = geohash2.encode(lon, lat, precision=7)
+    # print(geohash, geohash2node.get(geohash))
+    # print(geohash2node)
+    nearby_nodes = geohash2node.get(geohash)
+    closest_node = None
+    shortest = 1e10
+    for node in nearby_nodes:
+        coord2 = node2coord[node]
+        dist = get_dist([lon,lat], coord2)
+        if dist<shortest:
+            shortest = dist
+            closest_node = node
+    return closest_node, dist
+
+
+def get_dist(coord1, coord2):
+    lon, lat = coord1
+    lon2, lat2 = coord2
+    R = 6471
+    dlat = radians(lat2 - lat)
+    dlon = radians(lon2 - lon)
+
+    a = sin(dlat/2)**2 + cos(radians(lat)) * cos(radians(lat2)) * sin(dlon/2)**2
+    c = 2 * atan2(sqrt(a), sqrt(1-a))
+    distance = R * c
+    return distance
+
+if __name__=="__main__":
+    pass
