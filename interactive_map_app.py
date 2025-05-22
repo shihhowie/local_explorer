@@ -1,14 +1,16 @@
 import dash
 from dash import dcc, html, Input, Output, State
-from dash.dependencies import ALL
+from dash.dependencies import ALL, MATCH
 import plotly.graph_objects as go 
 from path_util import find_nearest_node
 from path_finder import run_Astar, run_Yens
+from collections import defaultdict
+import re
 import geohash2
 
 app = dash.Dash(__name__)
 
-def create_default_map():
+def create_default_map(lat=51.515, lon=-0.118):
     fig = go.Figure()
     fig.add_trace(go.Scattermap(
         lat=[51.515],
@@ -20,7 +22,7 @@ def create_default_map():
     fig.update_layout(
         map=dict(
             style="open-street-map",
-            center=dict(lat=51.515, lon=-0.118),
+            center=dict(lat=lat, lon=lon),
             zoom=14
         ),
         margin={"r":0,"t":0,"l":0,"b":0}
@@ -33,117 +35,177 @@ app.layout = html.Div([
 
     # Search bar for segment ID
     html.Div([
-        html.Div([
-            html.H3("Search Segments and Connectors", style={"textAlign": "center"}),
-            html.Div([
-                dcc.Input(
-                    id="segment-id-input",
-                    type="text",
-                    placeholder="Enter Segment ID",
-                    style={"width": "200px", "margin-right": "5px"}
-                ),
-                html.Button("Search", id="search-segment-button", n_clicks=0),
-            ], style={"display": "flex", "alignItems": "center", "margin-bottom": "10px"}),
-            html.Div([
-                dcc.Input(
-                    id="connector-id-input",
-                    type="text",
-                    placeholder="Enter Connector ID",
-                    style={"width": "200px", "margin-right": "5px"}
-                ),
-                html.Button("Search", id="search-connector-button", n_clicks=0),
-            ], style={"display": "flex", "alignItems": "center", "margin-bottom": "10px"}),
-        ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"}),
-        html.Div([
-            html.H3("Search Geohash", style={"textAlign": "center"}),
-            html.Div([
-                dcc.Input(
-                    id="geohash-id-input",
-                    type="text",
-                    placeholder="Enter Geohash ID",
-                    style={"width": "200px", "margin-right": "5px"}
-                ),
-                html.Button("Search", id="search-geohash-button", n_clicks=0),
-            ], style={"display": "flex", "alignItems": "center", "margin-bottom": "10px"}),
-        ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"}),
-        html.Div([
-            html.H3("Find Path", style={"textAlign": "center"}),
-            html.Div([
-                dcc.Input(
-                    id="start-coord-input",
-                    type="text",
-                    placeholder="Enter Start (lon, lat)",
-                    style={"width": "150px", "margin-right": "10px"}
-                ),
-                dcc.Input(
-                    id="finish-coord-input",
-                    type="text",
-                    placeholder="Enter Finish (lon, lat)",
-                    style={"width": "150px"}
-                )
-            ], style={"display": "flex", "alignItems": "center", "margin-bottom": "10px"}),
-            html.Div([
-                html.Button("Search", id="find-path-button", n_clicks=0)
-            ]),
-        ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"})
-    ], style={"display": "flex", "justifyContent": "space-around", "margin-bottom": "20px"}),
-    dcc.Store(id="current-map", data=create_default_map().to_plotly_json()),
-    html.Div([
         dcc.Graph(id="map-visualization",
             figure=create_default_map(),
-            style={"height": "80vh", "width": "80%"}
+            style={"height": "100vh", 
+                    "width": "100%",
+                    "position": "absolute",
+                    "top": "0",
+                    "left": "0",
+                    "z-index": "1"}
         ),
-        html.Div(
-            id="path-panel",
-            children=[
-                html.Button("X", id="close-path-panel-button", n_clicks=0, 
-                    style={"position": "absolute",
-                            "top": "5px",
-                            "right": "5px",
-                            "border": "none",
-                            "text-align": "center",
-                            "cursor": "pointer",}),
-                html.H3("Path Details", style={"textAlign": "left"}),
-                html.Div(id="path-legends", style={"textAlign": "left"}),
-            ],
-            style={"display":"none", 
-                    "border": "1px solid #ccc", 
-                    "padding": "10px", 
-                    "margin-right": "10px", 
-                    "width": "20%", 
-                    "position": "relative"}
-        )
-        ], style={"display": "flex", "alignItems": "flex-start"}
+        html.Div([
+            html.Div(
+                id = "search-overlay",
+                children=[
+                    html.Div([
+                        html.H3("Search Segments and Connectors", style={"textAlign": "center"}),
+                        html.Div([
+                            dcc.Input(
+                                id="segment-id-input",
+                                type="text",
+                                placeholder="Enter Segment ID",
+                                style={"width": "150px", "margin-right": "5px"}
+                            ),
+                            html.Button("Search", id="search-segment-button", n_clicks=0),
+                        ], style={"display": "flex", "alignItems": "center", "margin-bottom": "10px"}),
+                        html.Div([
+                            dcc.Input(
+                                id="connector-id-input",
+                                type="text",
+                                placeholder="Enter Connector ID",
+                                style={"width": "150px", "margin-right": "5px"}
+                            ),
+                            html.Button("Search", id="search-connector-button", n_clicks=0),
+                        ], style={"display": "flex", "alignItems": "center", "margin-bottom": "5px"}),
+                    ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"}),
+                    html.Div([
+                        html.H3("Search Geohash", style={"textAlign": "center"}),
+                        html.Div([
+                            dcc.Input(
+                                id="geohash-id-input",
+                                type="text",
+                                placeholder="Enter Geohash ID",
+                                style={"width": "150px", "margin-right": "5px"}
+                            ),
+                            html.Button("Search", id="search-geohash-button", n_clicks=0),
+                        ], style={"display": "flex", "alignItems": "center", "margin-bottom": "5px"}),
+                    ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"}),
+                    html.Div([
+                        html.H3("Find Path", style={"textAlign": "center"}),
+                        dcc.Input(
+                            id="start-coord-input",
+                            type="text",
+                            placeholder="Enter Start (lon, lat)",
+                            style={"width": "150px",  "margin-bottom": "10px"}
+                        ),
+                        dcc.Input(
+                            id="finish-coord-input",
+                            type="text",
+                            placeholder="Enter Finish (lon, lat)",
+                            style={"width": "150px", "margin-bottom": "10px"}
+                        ),
+                        html.Div([
+                            html.Button("Search", id="find-path-button", n_clicks=0)
+                        ]),
+                    ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"})
+                ], style={"position": "absolute",  # Position the search buttons as an overlay
+                        "top": "10px",  # Adjust the position from the top
+                        "left": "10px",  # Adjust the position from the left
+                        "background-color": "rgba(0, 0, 0, 0.7)",  # Semi-transparent background
+                        "padding": "10px",
+                        "border-radius": "10px",
+                        "height": "50vh",
+                        "width": "15%",
+                        "z-index": "2",  # Place the search buttons above the map
+                        "color": "white",  # Text color for better visibility}),
+                },
+            ),
+            html.Div(
+                id="path-panel",
+                children=[
+                    html.Button("X", id="close-path-panel-button", n_clicks=0, 
+                        style={"position": "absolute",
+                                "top": "5px",
+                                "right": "5px",
+                                "text-align": "center",
+                                "cursor": "pointer",}),
+                    html.H3("Path Details", style={"textAlign": "center"}),
+                    html.Div(id="path-legends", style={"textAlign": "center"}),
+                ],
+                style={"display":"none", 
+                        "border": "1px solid #ccc", 
+                        "top": "45px",
+                        "left": "10px",
+                        "padding": "10px", 
+                        "margin-right": "10px", 
+                        "width": "20%", 
+                        # "height": "100%",
+                        "position": "absolute"}
+                )
+        ])
+    ]),
+    html.Div(
+        id="path-detail-modal",
+        children=[
+            html.Div(
+                id="path-detail-content",
+                children=[
+                    html.Button("X", id="close-detail-button", n_clicks=0, 
+                        style={ "position": "absolute",
+                            "float": "right",
+                                "top": "5px",
+                                "right": "5px",
+                                "text-align": "center",
+                                "cursor": "pointer",}),
+                    html.H3("Path Detail", style={"textAlign": "center"}),
+                    html.Div(id="summary-text", style={"padding": "10px", "whiteSpace": "pre-wrap"}),
+                    html.Div(id="categories-section", style={"padding": "10px", "whatSpace": "pre-wrap"}),
+                    html.Div(
+                        children=[
+                            html.Button(f"Geohash", id="show-geohash-button", n_clicks=0 ,style={"margin-right": "5px"}),
+                            html.Button(f"Places", id="show-places-button", n_clicks=0),
+                    ], style={"padding": "10px"})
+                    
+                ]
+            )
+        ],
+        style={
+            "display": "none",  # Initially hidden
+            "position": "fixed",
+            "top": "0",
+            "left": "0",
+            "width": "20%",
+            "height": "100%",
+            "background-color": "white",
+            "z-index": "1000",
+            "justify-content": "center",
+            "align-items": "center",
+            "overflow-y": "auto",
+        },
     ),
     # Map visualization
-    dcc.Store(id="path-panel-state", data=False),
+    dcc.Store(id="current-map", data=create_default_map().to_plotly_json()),
+    dcc.Store(id="paths-panel-state", data={}),
     dcc.Store(id="path-data", data={}),
-    dcc.Store(id="geohash-grid-state", data={}),
-    dcc.Store(id="places-show-state", data={}),
-    dcc.Store(id="show-path-state", data={})
+    dcc.Store(id="geohash-grid-state", data=defaultdict(bool)),
+    dcc.Store(id="show-place-state", data=defaultdict(bool)),
+    dcc.Store(id="show-path-state", data={}),
+    dcc.Store(id="show-cat-place-state", data={}),
+    dcc.Store(id="path-detail-state", data={"visible": False, "text": ""}),
+    dcc.Store(id="map-state", data={"full_map": create_default_map().to_plotly_json(), "filtered": []}),
 ])
 
 @app.callback(
     [
-        Output("map-visualization", "figure"),
-        Output("path-panel", "style"),
-        Output("path-legends", "children"),
         Output("path-data", "data"),
-        Output("current-map", "data"),
-        Output("path-panel-state", "data"),
+        Output("paths-panel-state", "data"),
         Output("geohash-grid-state", "data"),
-        Output("places-show-state", "data"),
-        Output("show-path-state", "data")
+        Output("show-place-state", "data"),
+        Output("show-path-state", "data"),
+        Output("path-detail-state", "data"),
     ],
     [
         Input("find-path-button", "n_clicks"),
         Input("search-segment-button", "n_clicks"),
         Input("search-connector-button", "n_clicks"),
         Input("search-geohash-button", "n_clicks"),
-        Input({"type": "show-geohash-button", "index": ALL}, "n_clicks"),
-        Input({"type": "show-places-button", "index": ALL}, "n_clicks"),
+        Input("show-geohash-button", "n_clicks"),
+        Input("show-places-button", "n_clicks"),
         Input("close-path-panel-button", "n_clicks"),
         Input({"type": "show-path-button", "index": ALL}, "n_clicks"),
+        Input({"type": "path-detail-button", "index": ALL}, "n_clicks"),
+        Input("close-detail-button", "n_clicks"),
     ],
     [
         State("start-coord-input", "value"),
@@ -152,52 +214,37 @@ app.layout = html.Div([
         State("connector-id-input", "value"),
         State("geohash-id-input", "value"),
         State("path-data", "data"),
-        State("current-map", "data"),
-        State("path-panel-state", "data"),
+        State("paths-panel-state", "data"),
         State("geohash-grid-state", "data"),
-        State("places-show-state", "data"),
-        State("show-path-state", "data")
+        State("show-place-state", "data"),
+        State("show-path-state", "data"),
+        State("path-detail-state", "data"),
     ]
 )
-def update_map_and_panel(find_path_clicks, segment_clicks, connector_clicks, 
+def update_states(find_path_clicks, segment_clicks, connector_clicks, 
                         geohash_clicks, geohash_button_clicks, place_button_clicks,
-                        close_panel_clicks, show_path_click, start_coord, finish_coord, segment_id, 
-                        connector_id, geohashes, path_data, current_map, 
-                        path_panel_state, geohash_grid_state, places_show_state, show_path_state):
+                        close_panel_clicks, show_path_click, path_detail_clicks, close_path_detail_clicks,
+                        start_coord, finish_coord, segment_id, connector_id, geohashes, path_data, 
+                        paths_panel_state, geohash_grid_state, show_places_state, show_path_state, path_detail_state):
     ctx = dash.callback_context
     if not ctx.triggered:
-        return create_default_map(), \
-                {"display": "none"},  \
-                "No paths available", \
-                {}, \
-                create_default_map().to_plotly_json(), \
-                path_panel_state, \
-                geohash_grid_state, \
-                places_show_state, \
-                show_path_state
+        return  ( path_data, 
+                paths_panel_state, 
+                geohash_grid_state, 
+                show_places_state, 
+                show_path_state, 
+                path_detail_state)
 
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
     print("triggered_id:",triggered_id)
-    fig = go.Figure(current_map) if current_map else create_default_map()
-    panel_style = {"display": "none"}
-    legend_items = "No paths available"
-
-    if geohash_grid_state is None:
-        geohash_grid_state = {}
-    if places_show_state is None:
-        places_show_state = {}
-    if show_path_state is None:
-        show_path_state = defaultdict(dict)
 
     if triggered_id == "find-path-button":
-        fig, paths = find_shortest_paths(start_coord, finish_coord)
-        path_data = paths
-        # print(path_data)
-        path_panel_state = True
+        if not start_coord and not finish_coord:
+            start_coord, finish_coord = "x", "x"
+        fig, path_data = find_shortest_paths(start_coord, finish_coord)
+        paths_panel_state = {"show": True, "fig": fig.to_plotly_json()}
     elif triggered_id == "close-path-panel-button":
-        path_panel_state = False
-        panel_style = {"display": "none"}
-        fig = create_default_map()
+        paths_panel_state = {"show": False}
     elif triggered_id == "search-segment-button":
         fig = show_segment(segment_id)
     elif triggered_id == "search-connector-button":
@@ -205,84 +252,268 @@ def update_map_and_panel(find_path_clicks, segment_clicks, connector_clicks,
     elif triggered_id=="search-geohash-button":
         fig = show_geohash(geohashes)
     elif "show-geohash-button" in triggered_id:
-        path_id = eval(triggered_id)["index"]
-        # print("path_data", path_data)
-        
-        if geohash_grid_state.get(str(path_id), False):
-            geohash_grid_state[str(path_id)] = False
-            fig.data = [trace for trace in fig.data if trace.name != f"geohashes {path_id}"]
-        else:
-            geohashes = path_data[str(path_id)]["geohashes"]
-            get_geohash_corners(fig, geohashes, path_id)
-            geohash_grid_state[str(path_id)] = True
+        path_id = path_detail_state["path_id"]
+        geohash_grid_state[path_id] = not geohash_grid_state.get(path_id)
     elif "show-places-button" in triggered_id:
-        path_id = eval(triggered_id)["index"]
-        # print("path_data", path_data)
-        if places_show_state.get(str(path_id), False):
-            places_show_state[str(path_id)] = False
-            fig.data = [trace for trace in fig.data if trace.name != f"places on {path_id}"]
-        else:
-            places_show_state[str(path_id)] = True
-            place_ids = path_data[str(path_id)]["place_ids"]
-            show_places(fig, place_ids, path_id)
+        path_id = path_detail_state["path_id"]
+        show_places_state[path_id] = not show_places_state.get(path_id)
     elif "show-path-button" in triggered_id:
-        path_id = eval(triggered_id)["index"]
-        # print("path_data", path_data)
-        if str(path_id) not in show_path_state:
-            show_path_state[str(path_id)] = {"show": True}
-        if show_path_state[str(path_id)]["show"]:
-            show_path_state[str(path_id)]["show"] = False
-            if show_path_state[str(path_id)].get("saved_state") is None:
-                show_path_state[str(path_id)]["saved_state"] = [trace for trace in fig.data if trace.name == f"Path {path_id}"]
-            fig.data = [trace for trace in fig.data if trace.name is None or trace.name.find(str(path_id))==-1]
-        else:
-            show_path_state[str(path_id)]["show"] = True
-            for trace in show_path_state[str(path_id)]["saved_state"]:
-                fig.add_trace(go.Scattermap(**trace) )
-            
+        path_id = str(eval(triggered_id)["index"])
+        show_path_state[path_id] = not show_path_state.get(path_id, True)
+    elif "path-detail-button" in triggered_id:
+        fig = go.Figure(paths_panel_state["fig"])
+        path_id = str(eval(triggered_id)["index"])
+        path_detail_state = {"visible": True, "path_id": path_id}
+    elif "close-detail-button" in triggered_id:
+        path_detail_state = {"visible": False}
 
-    if path_panel_state:
-        panel_style = {"display": "block", 
-                        # "border": "1px solid #ccc", 
-                        "padding": "10px", 
-                        # "margin-top": "20px",
-                        "margin-left": "5px",
-                        "position": "relative"}
-        legend_items = show_path_panel(path_data) 
-    fig.update_layout(
-        showlegend=False
-    )
-    # print(fig.to_plotly_json())
-    return fig, \
-            panel_style, \
-            legend_items, \
-            path_data, \
-            fig.to_plotly_json(), \
-            path_panel_state, \
-            geohash_grid_state, \
-            places_show_state, \
-            show_path_state
+    return  (
+            path_data, 
+            paths_panel_state, 
+            geohash_grid_state, 
+            show_places_state, 
+            show_path_state, 
+            path_detail_state)
 
-def show_path_panel(path_data):
-    legend_items = []
-    for path_id, path_info in path_data.items():
-        legend_items.append(html.Div([
-            html.Button(
-                id={"type": "show-path-button", "index": path_id},
-                style={"display": "inline-block", 
-                        "background-color": path_info['color'], 
-                        "width": "5px", 
-                        "height": "10px",
-                        "margin-right": "10px",
+
+@app.callback(
+    Output("map-visualization", "figure"),
+    [Input("paths-panel-state", "data"),
+     Input("geohash-grid-state", "data"),
+     Input("show-place-state", "data"),
+     Input("show-path-state", "data"),
+     Input("path-detail-state", "data"),
+     Input("show-cat-place-state", "data")],
+    [State("path-data", "data")]
+)
+def update_map(paths_panel_state, geohash_grid_state, show_place_state, 
+                show_path_state, path_detail_state, show_cat_place_state,
+                path_data):
+    print("update_map")
+    # print(map_state)
+
+    print("paths_panel_state", paths_panel_state.get("show"))
+    # retrieved paths
+    if paths_panel_state.get("show", False):
+        fig = go.Figure(paths_panel_state["fig"])
+    elif path_data:
+        start_lat, start_lon = path_data["0"]["center"]
+        fig = create_default_map(start_lat, start_lon)
+    else:
+        fig = create_default_map()
+
+    hide_paths_ids = [f"{p}" for p in show_path_state if not show_path_state[p]]
+    print("hide_paths_ids", hide_paths_ids)
+    # fig.data = [trace for trace in fig.data if trace.name not in hide_paths_ids]
+   
+    print("path_detail_state", path_detail_state)
+    if not path_detail_state["visible"]:
+        fig.data = [trace for trace in fig.data if trace.name is None or not
+                                                any(re.search(p, trace.name) for p in hide_paths_ids)]
+    else:
+        path_id = path_detail_state["path_id"]
+        fig.data = [trace for trace in fig.data if trace.name == f"Path {path_id}"]
+
+    if path_detail_state["visible"]:
+        print("geohash_grid_state", geohash_grid_state)
+        if geohash_grid_state.get(path_id, False):
+            geohashes = path_data[path_id]["geohashes"]
+            color = path_data[path_id]['color']
+            get_geohash_corners(fig, geohashes, path_id, color)
+
+        print("show_place_state", show_place_state)
+        if show_place_state.get(path_id, False):
+            place_ids = path_data[path_id]["place_ids"]
+            color = path_data[path_id]['color']
+            show_places(fig, place_ids, path_id, color)
+
+        print("show_cat_place_state", show_cat_place_state.keys())
+        if show_cat_place_state.get(path_id, False):
+            place_ids = show_cat_place_state[path_id]
+            color = path_data[path_id]['color']
+            show_places(fig, place_ids, f"{path_id} cat", color)
+    
+    print("show figs", [trace.name for trace in fig.data])
+    for trace in fig.data:
+        if not trace.lat or not trace.lon:
+            print(f"Empty trace: {trace.name}")
+    return fig
+
+
+@app.callback(
+    [Output("path-detail-modal", "style"),
+     Output("summary-text", "children"),
+     Output("categories-section", "children")],
+    [Input("path-detail-state", "data")],
+    [State("path-data", "data")]
+)
+def show_path_detail_modal(path_detail_state, path_data):    
+    # print("toggle_path_detail_modal triggered", path_detail_state["visible"])
+    style = {"display": "none"}
+    summary = ""
+    categories_items = []
+    if path_detail_state["visible"]:
+        path_id = path_detail_state["path_id"]
+        summary_text = path_data[path_id]["summary"]
+        place_ids = path_data[path_id]["place_ids"]
+
+        style = {"display": "flex", 
+            "position": "absolute", 
+            "top": "10px", 
+            "left": "10px", 
+            "width": "20%", 
+            "height": "80%",
+            "background-color": "white",
+            "overflow-y": "auto",
+            "min-height": "80vh",
+            "height": "auto",
+            "z-index": "3"}
+        summary = summary_text
+        
+        top_cats = path_data[path_id]["top_cats"]
+        for idx, cat in enumerate(top_cats):
+            categories_items.append(html.Div([
+                html.Button([
+                    html.Span(f"{cat.replace("_", " ")}", style={"flex": "1", "text-align": "left"}),
+                    html.Span("+", id={"type": "cat-expand", "index": cat}, 
+                            style={"text-align": "right",
+                                    "font-size": "14px"}) 
+                    ],
+                    id={"type": "categories-button", "index": cat}, n_clicks=0,
+                    style={"width": "100%",
+                        "padding": "15px", 
                         "cursor": "pointer",
-                        "border": "none",},
-                        n_clicks=0,
-                        ),
-            html.Span(f"Path {path_id}: {path_info["length"]:.2f} km", style={"margin-right": "10px"}),
-            html.Button(f"Geohash", id={"type": "show-geohash-button", "index": path_id}, n_clicks=0),
-            html.Button(f"Places", id={"type": "show-places-button", "index": path_id}, n_clicks=0),
-        ], style={"margin-bottom": "5px", "position": "relative"}))
-    return legend_items
+                        "display": "flex",
+                        "justify-content": "space-between",
+                        "background-color": "rgba(0, 0, 0, 0.01)",
+                        "border": "none",
+                        "align-items": "center"}),
+                html.Div(
+                    id={"type": "category-content", "index": cat},
+                    children=[],
+                    style={"display": "none", "padding-left": "20px",
+                            "border": "1px solid #ccc",
+                            "overflow-y": "auto",
+                            "background-color": "rgba(0, 0, 0, 0.01)"}
+                )
+            ], 
+            id={"type": "category-container", "index": cat},  
+            style={"margin-bottom": "5px", 
+                   "border": "1px solid #ccc",
+                   "background-color": "rgba(0, 0, 0, 0.01)",
+                   "overflow": "hidden"}))
+        
+    return style, summary, categories_items
+
+@app.callback(
+    [Output("path-panel", "style"), Output("path-legends", "children")],
+    [Input("paths-panel-state", "data")],
+    [State("path-data", "data")]
+)
+def show_path_panel(paths_panel_state, path_data):
+    panel_style = {"display": "none"}
+    legend_items = []
+    if paths_panel_state.get("show", False):
+        panel_style = {"position": "absolute",  # Position the search buttons as an overlay
+                    "top": "calc(20px + 50vh + 20px)",  # Adjust the position from the top
+                    "left": "10px",  # Adjust the position from the left
+                    "background-color": "rgba(0, 0, 0, 0.7)",  # Semi-transparent background
+                    "padding": "10px",
+                    "border-radius": "10px",
+                    "width": "15%",
+                    "z-index": "2",  # Place the search buttons above the map
+                    "color": "white",  # Text color for better visibility}),
+            }
+        for path_id, path_info in path_data.items():
+            legend_items.append(html.Div([
+                html.Button(
+                    id={"type": "show-path-button", "index": path_id},
+                    style={"display": "inline-block", 
+                            "background-color": path_info['color'], 
+                            "width": "5px", 
+                            "height": "10px",
+                            "margin-right": "5px",
+                            "cursor": "pointer",
+                            "border": "none",},
+                            n_clicks=0,
+                            ),
+                html.Span(f"{path_info["length"]:.2f} km", style={"margin-right": "5px"}),
+                html.Button(f"Path Detail", id={"type": "path-detail-button", "index": path_id}, n_clicks=0)
+            ], 
+            style={"margin-bottom": "5px", "position": "relative"}))
+    
+    return panel_style, legend_items
+
+@app.callback(Output("show-cat-place-state", "data"),
+            [Input({"type": "categories-button", "index": ALL}, "n_clicks")],
+            [
+                State("path-detail-state", "data"),
+                State("path-data", "data"),
+                State("show-cat-place-state", "data")
+            ],
+)
+def show_category_places(n_clicks_list, path_detail_state, path_data, show_cat_place_state):
+    print("show_category_places", n_clicks_list)
+
+    ctx = dash.callback_context
+    if not ctx.triggered or sum(n_clicks_list)==0:
+        return show_cat_place_state
+
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    print("triggered_id:", triggered_id)
+
+    # Extract the category and path ID
+    # cat = eval(triggered_id)["index"]
+    path_id = path_detail_state["path_id"]
+    cats = list(path_data[path_id]["top_cats"].keys())
+    place_ids = []
+    for idx, n_clicks in enumerate(n_clicks_list):
+        if n_clicks%2==0:
+            continue
+        cat = cats[idx]
+        place_ids += [p for p in path_data[path_id]["place_ids"] if cat in places[p].get("categories", [])]
+
+    show_cat_place_state[path_id] = place_ids
+    return show_cat_place_state
+
+
+@app.callback(
+    [Output({"type": "category-content", "index": MATCH}, "children"),
+    Output({"type": "category-content", "index": MATCH}, "style"),
+    Output({"type": "cat-expand", "index": MATCH}, "children")
+    ],
+    [Input({"type": "categories-button", "index": MATCH}, "n_clicks")],
+    [State("path-detail-state", "data"), 
+     State("path-data", "data"),
+     State("show-cat-place-state", "data")]
+)
+def toggle_category_content(n_clicks, path_detail_state, path_data, show_cat_place_state):
+    print("toggle_category_content", n_clicks)
+    if n_clicks%2==0:
+        expand_sign = "+"
+    else:
+        expand_sign = "-"
+
+    ctx = dash.callback_context
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    print(triggered_id)
+    if not triggered_id or n_clicks%2==0:
+        return [], {"display": "none"}, expand_sign
+    cat = eval(triggered_id)["index"]
+    path_id = path_detail_state["path_id"]
+    place_ids = path_data[path_id]["place_ids"]
+
+    place_names = {
+        place_id: places[place_id]["name"].replace("_", " ") 
+        for place_id in place_ids
+        if cat in places[place_id].get("categories", [])
+    }
+
+    place_items = []
+    for name in place_names.values():
+        place_items.append(html.Div(name, style={"padding": "5px 0", "font-size": "12px"}))
+    style = {"display": "block", "padding-left": "20px", "overflow-y": "auto", "max-height": "200px"}
+    return place_items, style, expand_sign
 
 def show_segment(segment_id):
     # Create a new figure
@@ -325,7 +556,8 @@ def show_segment(segment_id):
         )
     # Set map layout
     fig.update_layout(
-        margin={"r": 0, "t": 0, "l": 0, "b": 0}
+        margin={"r": 0, "t": 0, "l": 0, "b": 0},
+        showlegend=False
     )
     return fig
 
@@ -359,7 +591,8 @@ def show_connector(connector_id):
                 style="open-street-map",
                 center=dict(lat=center_lat, lon=center_lon),
                 zoom=14
-            )
+            ),
+            showlegend=False
         )
     else:
         # If the segment ID is not found, display a message
@@ -413,19 +646,15 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
             path_len = path.length
             print("path length", path_len)
             path_coords = path.get_path_coords()
-            node_ids = path.get_path_nodes()
-            # geohashes = path.get_geohashes()
             print(f"show path {j}")
-            # print("places", path.get_places())
-            # get_geohash_corners(fig, geohashes)
-            # for geohash in geohashes:
-            #     get_geohash_corners(fig, geohash)
+            
             lats = [coord[1] for coord in path_coords]+[finish_lat]
             lons = [coord[0] for coord in path_coords]+[finish_lon]
 
             # print(lats, lons)
             # print(f"path {j}", node_ids)
             # Add the path to the map
+            # print("add path")
             fig.add_trace(go.Scattermap(
                 lat=lats,
                 lon=lons,
@@ -435,20 +664,15 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
                 # marker=dict(size=8, color="red"),
                 name=f"Path {j}"
             ))
-
-            # fig.add_trace(go.Scattermap(
-            #     lat=lats,
-            #     lon=lons,
-            #     mode="markers",
-            #     line=dict(width=4, color=colors[j]),
-            #     text=node_ids,
-            #     # marker=dict(size=8, color="red"),
-            # ))
+            
             path_data[j] = {
                 "length": path_len,
                 "color": colors[j],
                 "geohashes": list(path.get_geohashes()),
-                "place_ids": list(path.get_places())
+                "place_ids": list(path.get_places()),
+                "summary": path.summarize(),
+                "center": [start_lat, start_lon],
+                "top_cats": path.get_top_cat()
             }
 
         fig.add_trace(go.Scattermap(
@@ -465,7 +689,8 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
                 style="open-street-map",
                 center=dict(lat=start_lat, lon=start_lon),
                 zoom=14
-            )
+            ),
+            showlegend=False
         )
     except Exception as e:
         # Handle errors (e.g., invalid input or no path found)
@@ -486,7 +711,7 @@ def show_geohash(geohashes):
     
     return fig
 
-def get_geohash_corners(fig, geohashes, idx=0):
+def get_geohash_corners(fig, geohashes, idx=0, color='blue'):
     lats = []
     lons = []
     geohashes = sorted(geohashes)
@@ -515,13 +740,13 @@ def get_geohash_corners(fig, geohashes, idx=0):
         lat=lats,
         lon=lons,
         mode="lines",
-        line=dict(width=1, color="blue"),
+        line=dict(width=1, color=color),
         name=f"geohashes {idx}",
         showlegend=False
         )
     )
 
-def show_places(fig, place_ids, idx=0):
+def show_places(fig, place_ids, idx=0, color='blue'):
     coords = [places[x]['coord'] for x in place_ids]
     names = [places[x]['name'] for x in place_ids]
     # print(names)
@@ -532,8 +757,9 @@ def show_places(fig, place_ids, idx=0):
                 lon=lons,
                 mode="markers",
                 text=names,
-                name=f"places on {idx}"
-                # marker=dict(size=8, color="red"),
+                name=f"places on {idx}",
+                showlegend=False,
+                marker=dict(size=4, color=f"dark{color}"),
             ))
     
 

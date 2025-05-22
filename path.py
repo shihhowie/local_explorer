@@ -125,14 +125,20 @@ class Path:
         coords = [places[x]['coord'] for x in place_ids]
         return coords
 
-    def summarize(self):
+    def get_top_cat(self, k=5):
         category_cnt = defaultdict(int)
         place_ids = self.get_places()
         for place_id in place_ids:
             place = places[place_id]
             for cat in place['categories']:
                 category_cnt[cat]+=1
-        top_cats = sorted(category_cnt, key=lambda x: x[1], reverse=True)[:5]
-        cat_summary = ", ".join([f"{category_cnt[cat]} {cat.replace("_"," ")}s" for cat in top_cats])
-        print(f"this path is {self.length:.2f} km long. along this path, there are {cat_summary}")
-        
+        top_cats = sorted(category_cnt, key=lambda x: category_cnt[x], reverse=True)[:k]
+        top_cats = {x: category_cnt[x] for x in top_cats}
+        # print(top_cats)
+        return top_cats
+
+    def summarize(self):
+        top_cats = self.get_top_cat(5)
+        cat_summary = ", ".join([f"{cnt} {cat.replace("_"," ")}s" for cat, cnt in top_cats.items()])
+        summary = f"this path is {self.length:.2f} km long. along this path, there are {cat_summary}"
+        return summary
