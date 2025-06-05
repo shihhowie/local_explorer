@@ -6,6 +6,9 @@
 # connector 51.535, -0.102
 # overturemaps download --bbox=-0.119,51.511,-0.102,51.535 -f geojson --type=connector -o test_connector.geojson
 # overturemaps download --bbox=-0.118,51.515,-0.105,51.527 -f geojson --type=place -o test_places.geojson
+# overturemaps download --bbox=-0.118,51.515,-0.0535,51.549 -f geojson --type=place -o test_places_EC.geojson
+
+
 import json
 from collections import defaultdict
 import heapq

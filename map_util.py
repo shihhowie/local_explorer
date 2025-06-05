@@ -4,48 +4,6 @@ import geohash2
 import requests 
 from path_util import segment2coords, segment_info, node2coord
 
-def get_current_location():
-    resp = requests.get("https://ipinfo.io/json")
-    data = resp.json()
-    location = data["loc"].split(",")
-    lat, lon = float(location[0]), float(location[1])
-    return lat, lon 
-
-
-def visualize_segment(segment2coords, selected=None):
-    fig = go.Figure()
-    
-    for segment_id, segment in segment2coords.items():
-        # node, coords = segment
-        # print(segment_id, coords)
-        if segment_info[segment_id].get("underground"):
-            continue
-        lats = [coords[1] for node, coords in segment]
-        lons = [coords[0] for node, coords in segment]
-        # print(lats)
-        color = "blue" if segment_info[segment_id]["foot"] else "red"
-        width = 2 if segment_id!=selected else 4
-
-        fig.add_trace(go.Scattermapbox(
-            lat=lats,
-            lon=lons,
-            mode="lines",
-            line=dict(width=width, color=color),
-            hoverinfo="text",
-            text=segment_id,
-            name=f"Segment {segment_id}",
-            showlegend=False
-        ))
-    fig.update_layout(
-        mapbox=dict(
-            style="open-street-map",
-            center=dict(lat=51.515, lon=-0.118),
-            zoom=14
-        ),
-        margin={"r":0,"t":0,"l":0,"b":0}
-    )
-    fig.show()
-
 
 def visualize_path(coords, node_ids=None):
     fig = go.Figure()
@@ -167,21 +125,6 @@ def visualize_paths(paths):
     )
 
     fig.show()
-
-def find_nearest_node(lon, lat, geohash2node, node2coord):
-    geohash = geohash2.encode(lon, lat, precision=7)
-    # print(geohash, geohash2node.get(geohash))
-    # print(geohash2node)
-    nearby_nodes = geohash2node.get(geohash)
-    closest_node = None
-    shortest = 1e10
-    for node in nearby_nodes:
-        coord2 = node2coord[node]
-        dist = get_dist([lon,lat], coord2)
-        if dist<shortest:
-            shortest = dist
-            closest_node = node
-    return closest_node, dist
 
 
 def get_dist(coord1, coord2):
