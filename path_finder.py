@@ -14,63 +14,128 @@ from numpy import random
 import geohash2
 from path import Path
 from consts import *
+import plotly.graph_objects as go 
 
-from path_util import graph, node2coord, segment2coords, node2geohash, geohash2node
+from path_util import node2coord, segment2coords, node2geohash, geohash2node, segment_info
 from path_util import get_node_dist, find_nearest_node
 
+from graph_util import graph
+from map_util import visualize_paths
 
-def run_Yens(start, end, k=3, n_subpaths=3):
+colors = ["blue", "red", "orange", "purple", "cyan", "magenta"]
+
+def run_Yens(start, end, method="Astar", k=3, subpath_len=0.1):
     # run A* first
     paths = []
-    subpaths = [set() for _ in range(n_subpaths)]
+    candidate_paths = []
     graph_copy = graph.copy()
-    # blocked_path = set()
+    path_selection_tracker = []
     for i in range(k):
         if i==0:
-            shortest_path = run_Astar(start, end)
-            shortest_path_len = shortest_path.length
+            if method=="Astar":
+                shortest_path = run_Astar2(start, end)
+            if method=="djikstra":
+                shortest_path = run_djikstra2(start, end)
+        else:
+            prev_path = paths[i-1]
+            diff, dist_diff = prev_path - shortest_path
+            print(f"path diff by {diff} nodes, {dist_diff:.2f} km")
+        shortest_path_len = shortest_path.length
 
         paths.append(shortest_path)
         print("shortest_path_len", shortest_path.length, len(shortest_path.connections))
-        subpath_len = shortest_path_len/n_subpaths
+        
+        if shortest_path_len < subpath_len :
+            continue
         print("subpath_len", subpath_len)
         # print("shortest_path", shortest_path)
-        curr_path_len = 0
-        
+
+        subpaths = [0]
         subpath_idx = 0
+
+        curr_path_len = 0
         for con in shortest_path.connections:
             curr_path_len += con.distance
-            if curr_path_len>=subpath_len:
+            if curr_path_len>subpath_len:
+                # print("subpath", subpath_idx, curr_path_len)
+                subpaths.append(0)
                 subpath_idx+=1
                 curr_path_len = 0
-            subpaths[subpath_idx].add((con.node1, con.node2))
+            subpaths[subpath_idx] += 1
+        
+        print("subpaths len", subpaths) 
+        # shortest_path_len = 1e6
+        
+        # debug-------------------------
+        fig = go.Figure()
+        fig.update_layout(
+            map=dict(
+                style="open-street-map",
+                center=dict(lat=51.515, lon=-0.118),
+                zoom=14
+            ),
+            margin={"r":0,"t":0,"l":0,"b":0}
+        )
+        for path in paths:
+            path.gen_path_simple(fig, f"shortest path {i}-{path.length:.2f}", "green")
+        # debug-------------------------
 
-        print("subpaths", len(subpaths)) 
-        shortest_path_len = 1e6
-        shortest_path = []
-        for j in range(len(subpaths)):
+        n_subpaths = len(subpaths)
+        root_idx = 0
+        for j in range(n_subpaths):
             print(f"path {i}-{j}")
-            subpath = subpaths[j]
-            blocked_path = subpath
-            # blocked_path = set()
-            # for x in subpaths[j:]:
-            #     blocked_path.update(x)
-            # print("subpath: ", subpath)
-            print("blocked_path", len(blocked_path))
-            path = run_Astar(start, end, blocked_path=blocked_path)
-            path_len = path.length
-            paths.append(path)
-            print("path_len", path_len)
 
+            root_path = Path(shortest_path.connections[:root_idx])
+            root_path.gen_path_simple(fig, f"root subpath{i}-{j}-{root_path.length:.2f}", "blue")
+
+            root_link = shortest_path.connections[root_idx]
+            # print("root_link", root_link)
+
+            spur_link = (root_link.node1, root_link.node2)
+
+            # visualize_paths([subpath])
+            blocked_path = set()
+            
+            for path in paths:
+                shared_idx = path & root_path
+                print("shared idx", shared_idx)
+                blocked_len = 0
+                idx = 0
+                while blocked_len < subpath_len and shared_idx+idx < len(path.connections):
+                    # print("blocked link", path.connections[shared_idx+1].ends)
+                    blocked_path.add(path.connections[shared_idx+idx].ends)
+                    blocked_len += path.connections[shared_idx+idx].distance
+                    idx += 1
+
+            print("blocked_path len", len(blocked_path))
+            if method=="Astar":
+                spur_path = run_Astar2(spur_link[0], end, blocked_path)
+            if method=="djikstra":
+                spur_path = run_djikstra2(spur_link[0], end, blocked_path)
+            if spur_path:
+                root_path.merge_path(spur_path)
+                # print("new link", root_path.connections[j+1].ends)
+                diff, dist_diff = path - root_path
+                print(f"path diff by {diff} nodes, {dist_diff:.2f} km")
+                path = root_path
+                path_len = path.length
+                spur_path.gen_path_simple(fig, f"new subpath{i}-{j}-{root_path.length:.2f}", "orange")
+
+                heapq.heappush(candidate_paths, (path_len, i, j, path))
+                # paths.append(path)
+                # print("path_len", path_len)
+            
+
+            root_idx += subpaths[j]
+        # if i==0:
+        #     fig.show()
             # print(f"path {i}-{j}", path_len, [p[1] for p in path])
-            if path_len<shortest_path_len:
-                shortest_path_len = path_len
-                shortest_path = path
-                print(f"new shortest path {i}-{j}")
-            print("\n")
-
+        path_len, i_, j_, shortest_path = heapq.heappop(candidate_paths)
+        path_selection_tracker.append((i_, j_))
+        print("select deviated path", (i_, j_), path_len)
+        print("\n")
     # block certain segments
-
+    print("selected deviations:", path_selection_tracker)
     return paths
 
 def run_Astar(start, end, blocked_path=set()):
@@ -78,57 +143,189 @@ def run_Astar(start, end, blocked_path=set()):
     heap = [(0,0,start,[])]
     path_len = {}
     while heap:
-        dist_so_far, prev_heuristic, node, nodes = heapq.heappop(heap)
+        dist_so_far,prev_heuristic, node, path = heapq.heappop(heap)
         if node in path_len:
+            # print("node visited", dist_so_far, path_len[node])
             continue
         path_len[node] = dist_so_far
         if node == end:
             break
         neighbors = graph[node]
-        for nb_id, connection in neighbors.items():
-            dist, segment_id = connection
+        for nb_id, connections in neighbors.items():
+            shortest = 1e6
+            connection = None
+            for con in connections:
+                # find shortest path from one node to its neighbors
+                distance = con.distance
+                # if segment_info[con.segment_id]["motor_vehicle"]:
+                #     distance += 1e2
+                if distance < shortest:
+                    shortest = distance
+                    connection = con
+                
+            if not connection:
+                continue
+            dist = connection.distance
             if nb_id not in path_len:
-                tmp = nodes.copy()
-                tmp.append(nb_id)
+                tmp = path.copy()
+                tmp.append(connection)
                 dist_remain = get_node_dist(nb_id, end)
                 dist_so_far = dist_so_far + dist + dist_remain - prev_heuristic
                 if (node, nb_id) in blocked_path or (nb_id, node) in blocked_path:
                     dist_so_far += 1e3
                 heapq.heappush(heap,(dist_so_far, dist_remain, nb_id, tmp))
         i += 1
+    if node!=end:
+        return None
+    print("visited", i)
+
+    path = Path(path)
+
+    return path
+
+
+def run_Astar2(start, end, blocked_path=set()):
+    i = 0
+    heap = [(get_node_dist(start,end),start,[])]
+    path_len = {start:0}
+    visited = set()
+    while heap:
+        try:
+            priority, node, path = heapq.heappop(heap)
+        except Exception as e:
+            counter = defaultdict(list)
+            for x,y,_ in heap:
+                counter[y].append(x)
+            print(json.dumps(counter, indent=4))
+            break
+        i += 1
+        if node in visited:
+            continue
+        visited.add(node)
+        if node == end:
+            break
+        neighbors = graph[node]
+        for nb_id, connections in neighbors.items():
+            if nb_id in visited:
+                continue
+            shortest = 1e6
+            connection = None
+            for con in connections:
+                # find shortest path from one node to its neighbors
+                distance = con.distance
+                # if segment_info[con.segment_id]["motor_vehicle"]:
+                #     distance += 0.1
+                if segment_info[con.segment_id].get("underground"):
+                    distance += 0.1
+                if distance < shortest:
+                    shortest = distance
+                    connection = con
+                
+            if not connection:
+                continue
+            dist = shortest
+            dist_so_far = dist + path_len[node]
+            # if nb_id in path_len and dist_so_far<path_len[nb_id]:
+            #     print(nb_id, path_len[nb_id], dist_so_far)
+
+            if nb_id not in path_len or (dist_so_far+0.001) < path_len[nb_id]:
+                path_len[nb_id] = dist_so_far
+                tmp = path.copy()
+                tmp.append(connection)
+                dist_remain = get_node_dist(nb_id, end)
+                priority = dist_so_far + dist_remain
+                if (node, nb_id) in blocked_path or (nb_id, node) in blocked_path:
+                    priority += 0.2
+                # print("priority",priority)
+                heapq.heappush(heap,(priority, nb_id, tmp))
+    if node!=end:
+        return None
 
     print("visited", i)
 
-    path = Path(nodes)
+    path = Path(path)
 
     return path
 
 def run_djikstra(start, end, blocked_path=set()):
-    heap = [(0,start,[])]
     path_len = {}
     
     i = 0
+    heap = [(0,start,i,[])]
+
     while heap:
-        dist_so_far, node, nodes = heapq.heappop(heap)
+        dist_so_far, node, _, path = heapq.heappop(heap)
         if node in path_len:
+            if dist_so_far<path_len[node]:
+                print("node visited", dist_so_far, path_len[node])
             continue
         path_len[node] = dist_so_far
         if node == end:
             break
         neighbors = graph[node]
-        for nb_id, connection in neighbors.items():
-            dist, segment_id = connection
+        for nb_id, connections in neighbors.items():
+            shortest = 1e6
+            connection = None
+            for con in connections:
+                # find shortest path from one node to its neighbors
+                if con.distance < shortest:
+                    shortest = con.distance
+                    connection = con
+            if not connection:
+                continue
+            dist = connection.distance
             if nb_id not in path_len:
-                tmp = nodes.copy()
-                tmp.append(nb_id)
+                tmp = path.copy()
+                tmp.append(connection)
                 dist_so_far += dist
+                if (node, nb_id) in blocked_path or (nb_id, node) in blocked_path:
+                    dist_so_far += 1e3
+                heapq.heappush(heap,(dist_so_far, nb_id, i, tmp))
+        i += 1
+    if node!=end:
+        return None
+
+    print("visited", i)
+    path = Path(path)
+    # print(path)
+    # print(path_len[end])
+    return path
+
+def run_djikstra2(start, end, blocked_path=set()):
+    heap = [(0,start,[])]
+    path_len = {start: 0}
+    
+    i = 0
+    while heap:
+        priority, node, path = heapq.heappop(heap)
+        
+        if node == end:
+            break
+        neighbors = graph[node]
+        for nb_id, connections in neighbors.items():
+            shortest = 1e6
+            connection = None
+            for con in connections:
+                # find shortest path from one node to its neighbors
+                if con.distance < shortest:
+                    shortest = con.distance
+                    connection = con
+            if not connection:
+                continue
+            
+            dist = connection.distance
+            dist_so_far = path_len[node] + dist
+            if nb_id not in path_len or dist_so_far<path_len[nb_id]:
+                path_len[nb_id] = dist_so_far
+                tmp = path.copy()
+                tmp.append(connection)
                 if (node, nb_id) in blocked_path or (nb_id, node) in blocked_path:
                     dist_so_far += 1e3
                 heapq.heappush(heap,(dist_so_far, nb_id, tmp))
         i += 1
 
     print("visited", i)
-    path = Path(nodes)
+    path = Path(path)
     # print(path)
     # print(path_len[end])
     return path
@@ -236,11 +433,24 @@ if __name__=="__main__":
     end = '08f194ad32d1490a046bf9687066af0a'
     print(node2coord[end], node2coord[end][::-1])
     path = run_djikstra(start, end)
+    print(path.length)
+    path = run_djikstra2(start, end)
+    print(path.length)
     path = run_Astar(start, end)
-    paths = run_Yens(start, end, k=3)
-    for i, p in enumerate(paths):
-        print(p.get_path_nodes())
-    print(paths[1])
+    print(path.length)
+    path = run_Astar2(start, end)
+    print(path.length)
+    
+    start, end = '08f194ad32cc83ac046bb8349e64ca81', '08f194ad32d1490a046bf9687066af0a'
+    
+    paths = run_Yens(start, end, "Astar", 2, 0.5)
+
+    path = paths[0]
+    path = path.to_json()
+    path = Path.from_json(path)
+    # for i, p in enumerate(paths):
+    #     print(p.get_path_nodes())
+    # print(paths[1])
     # places = path.get_places()
     # print(places)
     path.summarize()

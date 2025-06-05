@@ -1,14 +1,20 @@
 import dash
 from dash import dcc, html, Input, Output, State
 from dash.dependencies import ALL, MATCH
+from dash_extensions import EventListener
+
 import plotly.graph_objects as go 
 from path_util import find_nearest_node
-from path_finder import run_Astar, run_Yens
+import requests
+
 from collections import defaultdict
 import re
 import geohash2
+from path import Path
 
 app = dash.Dash(__name__)
+ 
+path_cache = {}
 
 def create_default_map(lat=51.515, lon=-0.118):
     fig = go.Figure()
@@ -43,6 +49,11 @@ app.layout = html.Div([
                     "top": "0",
                     "left": "0",
                     "z-index": "1"}
+        ),
+        EventListener(
+            id="location-listener",
+            events=[{"event": "geolocation", "props": ["coords.latitude", "coords.longitude"]}],
+            children=[],
         ),
         html.Div([
             html.Div(
@@ -174,6 +185,7 @@ app.layout = html.Div([
             "overflow-y": "auto",
         },
     ),
+    dcc.Tooltip(id="hover-tooltip"),
     # Map visualization
     dcc.Store(id="current-map", data=create_default_map().to_plotly_json()),
     dcc.Store(id="paths-panel-state", data={}),
@@ -181,9 +193,11 @@ app.layout = html.Div([
     dcc.Store(id="geohash-grid-state", data=defaultdict(bool)),
     dcc.Store(id="show-place-state", data=defaultdict(bool)),
     dcc.Store(id="show-path-state", data={}),
+    dcc.Store(id="show-segment-state", data={}),
     dcc.Store(id="show-cat-place-state", data={}),
     dcc.Store(id="path-detail-state", data={"visible": False, "text": ""}),
-    dcc.Store(id="map-state", data={"full_map": create_default_map().to_plotly_json(), "filtered": []}),
+    dcc.Store(id="highlight-place-state", data={}),
+    dcc.Store(id="user-location", data=None)
 ])
 
 @app.callback(
@@ -194,6 +208,7 @@ app.layout = html.Div([
         Output("show-place-state", "data"),
         Output("show-path-state", "data"),
         Output("path-detail-state", "data"),
+        Output("show-segment-state", "data"),
     ],
     [
         Input("find-path-button", "n_clicks"),
@@ -219,13 +234,15 @@ app.layout = html.Div([
         State("show-place-state", "data"),
         State("show-path-state", "data"),
         State("path-detail-state", "data"),
+        State("show-segment-state", "data")
     ]
 )
 def update_states(find_path_clicks, segment_clicks, connector_clicks, 
                         geohash_clicks, geohash_button_clicks, place_button_clicks,
                         close_panel_clicks, show_path_click, path_detail_clicks, close_path_detail_clicks,
                         start_coord, finish_coord, segment_id, connector_id, geohashes, path_data, 
-                        paths_panel_state, geohash_grid_state, show_places_state, show_path_state, path_detail_state):
+                        paths_panel_state, geohash_grid_state, show_places_state, show_path_state,
+                        path_detail_state, show_segment_state):
     ctx = dash.callback_context
     if not ctx.triggered:
         return  ( path_data, 
@@ -233,7 +250,8 @@ def update_states(find_path_clicks, segment_clicks, connector_clicks,
                 geohash_grid_state, 
                 show_places_state, 
                 show_path_state, 
-                path_detail_state)
+                path_detail_state,
+                show_segment_state)
 
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
     print("triggered_id:",triggered_id)
@@ -246,7 +264,7 @@ def update_states(find_path_clicks, segment_clicks, connector_clicks,
     elif triggered_id == "close-path-panel-button":
         paths_panel_state = {"show": False}
     elif triggered_id == "search-segment-button":
-        fig = show_segment(segment_id)
+        show_segment_state["segment_id"] = segment_id
     elif triggered_id == "search-connector-button":
         fig = show_connector(connector_id)
     elif triggered_id=="search-geohash-button":
@@ -273,7 +291,8 @@ def update_states(find_path_clicks, segment_clicks, connector_clicks,
             geohash_grid_state, 
             show_places_state, 
             show_path_state, 
-            path_detail_state)
+            path_detail_state,
+            show_segment_state)
 
 
 @app.callback(
@@ -283,12 +302,15 @@ def update_states(find_path_clicks, segment_clicks, connector_clicks,
      Input("show-place-state", "data"),
      Input("show-path-state", "data"),
      Input("path-detail-state", "data"),
-     Input("show-cat-place-state", "data")],
+     Input("show-cat-place-state", "data"),
+     Input("highlight-place-state", "data"),
+     Input("show-segment-state", "data"),
+     Input("user-location", "data")],
     [State("path-data", "data")]
 )
 def update_map(paths_panel_state, geohash_grid_state, show_place_state, 
                 show_path_state, path_detail_state, show_cat_place_state,
-                path_data):
+                highlight_place_state, show_segment_state, user_location, path_data):
     print("update_map")
     # print(map_state)
 
@@ -296,11 +318,19 @@ def update_map(paths_panel_state, geohash_grid_state, show_place_state,
     # retrieved paths
     if paths_panel_state.get("show", False):
         fig = go.Figure(paths_panel_state["fig"])
-    elif path_data:
-        start_lat, start_lon = path_data["0"]["center"]
-        fig = create_default_map(start_lat, start_lon)
     else:
-        fig = create_default_map()
+        if path_data:
+            start_lat, start_lon = path_data["0"]["center"]
+            fig = create_default_map(start_lat, start_lon)
+        else: 
+            if user_location is None:
+                fig = create_default_map()
+            else:
+                print("location")
+                lat, lon = user_location["lat"], user_location["lon"] 
+                fig = create_default_map
+        if show_segment_state.get("segment_id"):
+            fig = show_segment(show_segment_state["segment_id"])
 
     hide_paths_ids = [f"{p}" for p in show_path_state if not show_path_state[p]]
     print("hide_paths_ids", hide_paths_ids)
@@ -313,6 +343,8 @@ def update_map(paths_panel_state, geohash_grid_state, show_place_state,
     else:
         path_id = path_detail_state["path_id"]
         fig.data = [trace for trace in fig.data if trace.name == f"Path {path_id}"]
+        path = path_cache[path_id]
+        path.gen_path(fig, path_id)
 
     if path_detail_state["visible"]:
         print("geohash_grid_state", geohash_grid_state)
@@ -332,8 +364,12 @@ def update_map(paths_panel_state, geohash_grid_state, show_place_state,
             place_ids = show_cat_place_state[path_id]
             color = path_data[path_id]['color']
             show_places(fig, place_ids, f"{path_id} cat", color)
+
+            if highlight_place_state.get("place_id") is not None:
+                place_id = highlight_place_state["place_id"]
+                highlight_place(fig, place_id, color)
     
-    print("show figs", [trace.name for trace in fig.data])
+    print("show figs", set([trace.name for trace in fig.data]))
     for trace in fig.data:
         if not trace.lat or not trace.lon:
             print(f"Empty trace: {trace.name}")
@@ -510,10 +546,40 @@ def toggle_category_content(n_clicks, path_detail_state, path_data, show_cat_pla
     }
 
     place_items = []
-    for name in place_names.values():
-        place_items.append(html.Div(name, style={"padding": "5px 0", "font-size": "12px"}))
+    for place_id, name in place_names.items():
+        place_items.append(html.Button(name, 
+                id={"type": "place-button", "index": place_id},
+                style={"padding": "5px 0", "font-size": "12px", 
+                        "cursor": "pointer", "width": "100%",
+                        "background-color": "none",
+                        "padding": "10px",
+                        "border": "none", "textAlign": "left"}))
     style = {"display": "block", "padding-left": "20px", "overflow-y": "auto", "max-height": "200px"}
     return place_items, style, expand_sign
+
+@app.callback(
+    Output("highlight-place-state", "data"),
+    [Input({"type": "place-button", "index": ALL}, "n_clicks")],
+    State("highlight-place-state", "data")
+)
+def highlight_place_on_map(n_clicks_list, highlighted_place):
+    ctx = dash.callback_context
+    print("place clicks", n_clicks_list)
+    if not ctx.triggered:
+        return {}
+    triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
+    if not triggered_id:
+        return {}
+    print("highlight_place_on_map", triggered_id)
+    place_id = eval(triggered_id)["index"]
+    # print([button_id["id"]["index"] for button_id in ctx.inputs_list[0]])
+    button_idx = [button_id["id"]["index"] for button_id in ctx.inputs_list[0]].index(place_id)
+    print("button_idx", button_idx)
+    if n_clicks_list[button_idx] is not None and n_clicks_list[button_idx] > 0:
+        print("highlited place id", place_id)
+        highlighted_place["place_id"] = place_id
+    return highlighted_place
+
 
 def show_segment(segment_id):
     # Create a new figure
@@ -521,6 +587,20 @@ def show_segment(segment_id):
         return create_default_map()
 
     fig = go.Figure()
+    road_info = segment_info[segment_id]
+    if road_info["foot"]:
+        node_type = "foot"
+    elif road_info["bicycle"]:
+        node_type = "bicycle"
+    else:
+        node_type = "motor_vehicle"
+    
+    color_map = {
+        "foot": "green",
+        "bicycle": "blue",
+        "motor_vehicle": "red"
+    }
+
     # Check if the segment ID exists
     if segment_id in segment2coords:
         coords = segment2coords[segment_id]
@@ -532,7 +612,7 @@ def show_segment(segment_id):
             lat=lats,
             lon=lons,
             mode="lines",
-            line=dict(width=4, color="red"),
+            line=dict(width=4, color=color_map[node_type]),
             name=f"Segment {segment_id}"
         ))
         # Center the map on the segment
@@ -560,7 +640,6 @@ def show_segment(segment_id):
         showlegend=False
     )
     return fig
-
 
 def show_connector(connector_id):
     # Create a new figure
@@ -611,11 +690,10 @@ def show_connector(connector_id):
 
     return fig
 
-
 def find_shortest_paths(start_coord='x', finish_coord='x'):
     # Create a new figure
     fig = create_default_map()
-
+    
     # Check if start and finish coordinates are provided
     if not start_coord or not finish_coord:
         return fig
@@ -640,14 +718,32 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
         print(start_node,finish_node)
         # Find the shortest path using A* algorithm
         # path, path_len = run_Astar(start_node, finish_node, graph)
-        paths = run_Yens(start_node, finish_node, 1)
+        url = "http://127.0.0.1:9997/find_paths"
+
+        params = {
+            "start": f"{start_node}",
+            "end": f"{finish_node}",
+            "subpath_len": 0.4
+        }
+        response = requests.get(url, params=params)
+        paths = []
+        if response.status_code == 200:
+            data = response.json()
+            for path in data["paths"]:
+                paths.append(Path.from_json(path))
+        else:
+            raise RuntimeError(f"failed to fetch pthats: {response.status_code} - {response.text}")
+        # paths = run_Yens(start_node, finish_node, "Astar", 5, 0.3)
+        # paths = run_Yens(start_node, finish_node, "djikstra", 1, 3)
         print("ran Yens")
         for j, path in enumerate(paths):
             path_len = path.length
             print("path length", path_len)
             path_coords = path.get_path_coords()
-            print(f"show path {j}")
-            
+            # print(f"show path {j}")
+            # print(path.get_segments_ids())
+            # print(f"show noes {j}")
+            # print(path.get_path_nodes())
             lats = [coord[1] for coord in path_coords]+[finish_lat]
             lons = [coord[0] for coord in path_coords]+[finish_lon]
 
@@ -661,10 +757,12 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
                 mode="lines",
                 hoverinfo='skip',
                 line=dict(width=4, color=colors[j]),
+                opacity=0.8,
                 # marker=dict(size=8, color="red"),
                 name=f"Path {j}"
             ))
-            
+            # path.gen_path(fig, j)
+
             path_data[j] = {
                 "length": path_len,
                 "color": colors[j],
@@ -674,15 +772,27 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
                 "center": [start_lat, start_lon],
                 "top_cats": path.get_top_cat()
             }
-
+            path_cache[str(j)] = path
+            
         fig.add_trace(go.Scattermap(
             lat=[start_lat, finish_lat],
             lon=[start_lon, finish_lon],
             mode="markers+text",
-            marker=dict(symbol="star"),
-            text=["start", "end"],
+            marker=dict(color="black", size=12),
+            hoverinfo="skip",
             name=f"End point",
         ))
+        
+        fig.add_trace(go.Scattermap(
+            lat=[start_lat, finish_lat],
+            lon=[start_lon, finish_lon],
+            mode="markers",
+            marker=dict(color="white", size=9),
+            text=["start", "end"],
+            hoverinfo="text",
+            name=f"End point",
+        ))
+        
         # Center the map on the start point
         fig.update_layout(
             map=dict(
@@ -703,6 +813,18 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
         )
 
     return fig, path_data
+
+@app.callback(
+    Output("user-location", "data"),
+    [Input("location-listener", "event")]
+)
+def update_user_location(event):
+    print("update user location")
+    if event is None:
+        return None
+    lat = event["coords.latitude"]
+    lon = even["coords.longitude"]
+    return {"lat": lat, "lon": lon}
 
 def show_geohash(geohashes):
     fig = create_default_map()
@@ -749,7 +871,7 @@ def get_geohash_corners(fig, geohashes, idx=0, color='blue'):
 def show_places(fig, place_ids, idx=0, color='blue'):
     coords = [places[x]['coord'] for x in place_ids]
     names = [places[x]['name'] for x in place_ids]
-    # print(names)
+    print(", ".join(names))
     lats = [coord[1] for coord in coords]
     lons = [coord[0] for coord in coords]
     fig.add_trace(go.Scattermap(
@@ -757,13 +879,47 @@ def show_places(fig, place_ids, idx=0, color='blue'):
                 lon=lons,
                 mode="markers",
                 text=names,
+                name=f"places on {idx} border",
+                hoverinfo="text",
+                showlegend=False,
+                opacity=0.5,
+                marker=dict(size=8, color="white"),
+            ))
+    fig.add_trace(go.Scattermap(
+                lat=lats,
+                lon=lons,
+                mode="markers",
+                text=names,
                 name=f"places on {idx}",
                 showlegend=False,
-                marker=dict(size=4, color=f"dark{color}"),
+                opacity=0.6,
+                hoverinfo="skip",
+                marker=dict(size=6, color=color),
             ))
-    
 
-from path_util import graph, segment2coords, node2geohash, geohash2node, node2coord
+def highlight_place(fig, place_id, color):
+    coord = places[place_id]["coord"]
+    name = places[place_id]["name"]
+    fig.add_trace(go.Scattermap(
+        lat = [coord[1]], lon=[coord[0]],
+        mode="markers",
+        marker=dict(size=14, color="white"),
+        name="highlited place border",
+        opacity=0.7,
+        showlegend=False
+    ))
+    fig.add_trace(go.Scattermap(
+        lat = [coord[1]], lon=[coord[0]],
+        mode="markers+text",
+        text=[name],
+        marker=dict(size=10, color=color, opacity=0.7),
+        textfont=dict(color=color),
+        textposition="top right",
+        name="highlited place",
+        showlegend=False
+    ))
+
+from path_util import segment2coords, node2geohash, geohash2node, node2coord, segment_info
 from path_util import places
 
 if __name__=="__main__":

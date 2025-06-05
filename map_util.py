@@ -1,24 +1,40 @@
 import plotly.graph_objects as go 
 from math import *
 import geohash2
+import requests 
+from path_util import segment2coords, segment_info, node2coord
+
+def get_current_location():
+    resp = requests.get("https://ipinfo.io/json")
+    data = resp.json()
+    location = data["loc"].split(",")
+    lat, lon = float(location[0]), float(location[1])
+    return lat, lon 
 
 
 def visualize_segment(segment2coords, selected=None):
     fig = go.Figure()
-
-    for segment_id, coords in segment2coords.items():
-        lats += [coords[1] for node in coords]
-        lons += [coords[0] for node in coords]
-
-        color = "blue" if segment_id!=selected else "red"
+    
+    for segment_id, segment in segment2coords.items():
+        # node, coords = segment
+        # print(segment_id, coords)
+        if segment_info[segment_id].get("underground"):
+            continue
+        lats = [coords[1] for node, coords in segment]
+        lons = [coords[0] for node, coords in segment]
+        # print(lats)
+        color = "blue" if segment_info[segment_id]["foot"] else "red"
         width = 2 if segment_id!=selected else 4
 
         fig.add_trace(go.Scattermapbox(
-            lat=edge_lats,
-            lon=edge_lons,
+            lat=lats,
+            lon=lons,
             mode="lines",
             line=dict(width=width, color=color),
-            name=f"Segment {segment_id}"
+            hoverinfo="text",
+            text=segment_id,
+            name=f"Segment {segment_id}",
+            showlegend=False
         ))
     fig.update_layout(
         mapbox=dict(
@@ -31,7 +47,8 @@ def visualize_segment(segment2coords, selected=None):
     fig.show()
 
 
-def visualize_path(fig, coords, node_ids=None):
+def visualize_path(coords, node_ids=None):
+    fig = go.Figure()
     node_lats = []
     node_lons = []
     edge_lats = []
@@ -42,7 +59,6 @@ def visualize_path(fig, coords, node_ids=None):
     if not node_ids:
         node_ids = range(len(node_lats))
     
-
     # Create edges
     for i in range(1,len(coords)):
         A = coords[i-1]
@@ -86,7 +102,7 @@ def visualize_path(fig, coords, node_ids=None):
     fig.show()
 
 
-def visualize_paths(paths, node2coord):
+def visualize_paths(paths):
     # Create a scatter plot for nodes
     node_lats = []
     node_lons = []
@@ -125,17 +141,19 @@ def visualize_paths(paths, node2coord):
             lon=edge_lons,
             mode="lines",
             line=dict(width=3, color=colors[idx % len(colors)]),
-            name=f"Path {idx+1} Edge"
+            name=f"Path {idx+1} Edge",
+            hoverinfo="text"
         ))
 
         # Add nodes
         fig.add_trace(go.Scattermapbox(
             lat=node_lats,
             lon=node_lons,
-            mode="markers+text",
+            mode="markers",
             marker=dict(size=8, color=colors[idx % len(colors)]),
             text=[f"Node {node}" for node in nodes],
-            name=f"Path {idx + 1} Node"
+            name=f"Path {idx + 1} Node",
+            hoverinfo="skip"
         ))
 
     # Set map layout
@@ -179,4 +197,5 @@ def get_dist(coord1, coord2):
     return distance
 
 if __name__=="__main__":
-    pass
+    
+    print(visualize_segment(segment2coords))

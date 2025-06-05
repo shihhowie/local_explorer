@@ -44,6 +44,7 @@ def build_graph(connections):
     segment2coords = {}
     for connection in connections:
         segment_id = connection['properties']['id']
+        road_info = process_road_info(connection)
         path_coords = []
         if connection['properties']['subtype']!="road":
             # print(connection['properties']['subtype'])
@@ -115,7 +116,79 @@ def load_vertices():
             node2coord[id] = coord
     return node2coord, nodes
 
+def process_road_info(segment_data):
+    #   access denied
+    #       if it is backward, that means cars can go forward, so its a car road
+    #       if mode =[motor_vehicle], then it's a non-car road
+    #       if mode =[bicycle] and foot is access allowed, then it is foot road
+    #       if mode =[foot] this usually means it is some private space
+    #
+    #   access allowed
+    #       if mode=[motor_vehicle], this usually means some delivery route, since
+    #           if cars can access it usually foot and bike also can.  It is only when
+    #       if mode=[foot]: this usually means its a walk path that bikes can't use
+    #       
 
+    properties = segment_data['properties']
+    road_info = {"foot": False, "bicycle": False, "motor_vehicle": False, "sidewalk": False}
+    if properties['subtype']!="road":
+        road_type = None
+
+    if properties.get('speed_limits') is None:
+        if properties.get('class') != 'cycleway':
+            road_info['foot'] = True
+        else:
+            road_info['bicycle'] = True
+            if properties.get('access_restrictions'):
+                foot = True
+                for access in properties['access_restrictions']:
+                    if access['when'] is None: 
+                        continue
+                    if access['access_type']=="allowed":
+                        if access['when']['mode']=="foot":
+                            road_info['foot'] = True
+                            break
+                    if access['access_type']=="denied":
+                        if access['when']['mode']=="foot":
+                            road_info['foot'] = False
+                road_info['foot'] = foot
+    else:
+        if properties.get('class') != 'cycleway':
+            road_info['motor_vehicle'] = True
+        else:
+            road_info['bicycle'] = True
+        
+    if properties.get("subclass") and properties["subclass"]=="sidewalk":
+        road_info["sidewalk"] = True
+
+    if properties.get("level_rules"):
+        for rule in properties["level_rules"]:
+            if rule.get("value")<0:
+                road_info["underground"] = True
+    return road_info
+
+                
+
+def process_connections(data):
+    segment2coords = {}
+    segment_info = {}
+    for connection in data:
+        segment_id = connection['properties']['id']
+        road_info = process_road_info(connection)
+        segment_info[segment_id] = road_info
+        path_coords = []
+        if connection['properties']['subtype']!="road":
+            # print(connection['properties']['subtype'])
+            continue
+        nodes = connection['properties']['connectors']
+        for node in nodes:
+            node_id = node['connector_id']
+            if node_id not in node2coord:
+                continue
+            node_coord = node2coord[node_id]
+            path_coords.append((node_id, node_coord))
+        segment2coords[segment_id] = path_coords
+    return segment2coords, segment_info
 def load_connections():
     with open("./local_data/test_segments.geojson") as f:
         data = json.load(f)
@@ -124,13 +197,13 @@ def load_connections():
     return data
 
 def load_maps():
-    global node2coord, graph, segment2coords, node2geohash, geohash2node, segment2feat
+    global node2coord, segment2coords, node2geohash, geohash2node, segment2feat
 
     node2coord, nodes = load_vertices()
     connections = load_connections()
-    graph, segment2coords = build_graph(connections)
+    segment2coords, segment_info = process_connections(connections)
     node2geohash, geohash2node = map_nodes_to_geohashes(nodes)
-    return graph, segment2coords, node2geohash, geohash2node, node2coord
+    return segment2coords, node2geohash, geohash2node, node2coord, segment_info
 
 def get_places():
     with open("./local_data/test_places.geojson") as f:
@@ -198,6 +271,41 @@ def calculate_adj(geohash, direction):
     neighbor_char = BASE32[NEIGHBORS[direction][type_index].index(last_char)]
     return base + neighbor_char
 
-graph, segment2coords, node2geohash, geohash2node, node2coord = load_maps()
+segment2coords, node2geohash, geohash2node, node2coord, segment_info = load_maps()
 places, geohash2place = get_places()
 
+
+if __name__=="__main__":
+    with open("./local_data/test_segments.geojson") as f:
+        data = json.load(f)
+    data = data['features']
+    counter = defaultdict(int)
+    c = 0
+    for x in data:
+        p = x['properties']
+        if p.get("class")!="cycleway":
+            continue
+        if p.get("access_restrictions") is not None:
+            c+=1
+            show = False
+            for a in p['access_restrictions']:
+                if a.get("access_type")=='allowed':
+                    if a.get("when"):
+                        if a["when"].get("mode") is None:
+                            print (a['when'])
+                        mode = a["when"]["mode"][0] if a["when"].get("mode") else "na"
+                        counter[mode]+=1 
+                    if a.get("when") and a['when'].get("heading")=="backward":
+                        show = True
+            if show:
+                o = {
+                    "id": p['id'],
+                    "class": p.get("class"),
+                    "subclass": p.get("subclass"),
+                    "subtype": p.get("subtype"),
+                    "access_restrictions": p.get("access_restrictions"),
+                    "speed_limits": p.get("speed_limits")
+                }
+    print(json.dumps(counter, indent=4))
+    print(c)
+                # print(json.dumps(o, indent=4))
