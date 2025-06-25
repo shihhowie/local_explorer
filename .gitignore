@@ -6,3 +6,5 @@ local_model/*
 local_data/*
 
 .DS_Store
+
+app/__pycache__/*
