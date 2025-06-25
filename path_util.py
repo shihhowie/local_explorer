@@ -24,9 +24,9 @@ def get_dist(coord1, coord2):
     distance = R * c
     return distance
 
-def find_nearest_node(lon, lat, geohash2node, node2coord):
+def find_nearest_node(lon, lat):
     geohash = geohash2.encode(lon, lat, precision=7)
-    # print(geohash, geohash2node.get(geohash))
+    print(geohash, geohash2node.get(geohash))
     # print(geohash2node)
     nearby_nodes = geohash2node.get(geohash)
     closest_node = None

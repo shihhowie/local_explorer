@@ -12,7 +12,7 @@
 import json
 from collections import defaultdict
 import heapq
-# from map_util import visualize_paths
+
 from numpy import random
 import geohash2
 from path import Path
@@ -22,8 +22,7 @@ import plotly.graph_objects as go
 from path_util import node2coord, segment2coords, node2geohash, geohash2node, segment_info
 from path_util import get_node_dist, find_nearest_node
 
-from graph_util import graph
-from map_util import visualize_paths
+from graph_util import graph, full_graph
 
 colors = ["blue", "red", "orange", "purple", "cyan", "magenta"]
 
@@ -96,7 +95,6 @@ def run_Yens(start, end, method="Astar", k=3, subpath_len=0.1):
 
             spur_link = (root_link.node1, root_link.node2)
 
-            # visualize_paths([subpath])
             blocked_path = set()
             
             for path in paths:
@@ -333,50 +331,42 @@ def run_djikstra2(start, end, blocked_path=set()):
     # print(path_len[end])
     return path
 
-def build_path(nodes):
-    prev = None
-    path = []
-    for node in nodes:
-        if prev:
-            path.append((prev, node))
-        prev = node
-    return path
+def full_djikstra(start, max_dist):
+    heap = [(0,start,[])]
+    path_len = {start: 0}
+    border = {}
+    i = 0
+    while heap:
+        priority, node, path = heapq.heappop(heap)
+        neighbors = full_graph[node]
+        for nb_id, connections in neighbors.items():
+            shortest = 1e6
+            connection = None
+            for con in connections:
+                # find shortest path from one node to its neighbors
+                if con.distance < shortest:
+                    shortest = con.distance
+                    connection = con
+            if not connection:
+                continue
+            
+            dist = connection.distance
+            dist_so_far = path_len[node] + dist
+            if dist_so_far>max_dist:
+                border[node] = dist_so_far
+                continue
 
-def find_places_along_path(nodes):
-    places, geohash2place = get_places()
-    place_ids = set()
-    prev_node = None
-    for node in nodes:
-        if prev_node:
-            start_coord, end_coord = node2coord[prev_node], node2coord[node]
-            place_ids_, _ = find_places_between_points(start_coord, end_coord, geohash2place)
-            place_ids.update(place_ids_)
-        prev_node = node
-    category_cnt = defaultdict(int)
-    places_in_path = [places[x] for x in place_ids]
-    # print(json.dumps(places_in_path, indent=2))
-    for place_id in place_ids:
-        place = places[place_id]
-        for cat in place['categories']:
-            category_cnt[cat]+=1
-    top_cat = sorted(category_cnt, key=lambda x: category_cnt[x], reverse=True)
-    return {cat: category_cnt[cat] for cat in top_cat[:10]}
+            if nb_id not in path_len or dist_so_far<path_len[nb_id]:
+                path_len[nb_id] = dist_so_far
+                tmp = path.copy()
+                tmp.append(connection)
+                heapq.heappush(heap,(dist_so_far, nb_id, tmp))
+        i += 1
 
-def find_places_between_points(start_coord, end_coord, geohash2place):
-    lon_d = abs(start_coord[0]-end_coord[0])
-    lat_d = abs(start_coord[1]-end_coord[1])
-    dist = max(lat_d, lon_d)
-    # print("dist", dist)
-    num_points = max(2,int(dist/0.0001)) # lat delta 0.000085, lon delta 0.00017
-    nodes = interpolate_points(start_coord, end_coord, num_points)
-    geohashes = set()
-    place_ids = set()
-    for lon, lat in nodes:
-        node_geohash8 = geohash2.encode(lon, lat, precision=8)
-        geohashes.add(node_geohash8)
-        pids = geohash2place.get(node_geohash8, [])
-        place_ids.update(pids)
-    return place_ids, geohashes 
+    print("visited", i)
+    # print(path)
+    # print(path_len[end])
+    return border
 
 def enrich_segment(segments):
     # use geohash instead of coordinates
@@ -435,28 +425,30 @@ if __name__=="__main__":
 
     end = '08f194ad32d1490a046bf9687066af0a'
     print(node2coord[end], node2coord[end][::-1])
-    path = run_djikstra(start, end)
-    print(path.length)
+    # path = run_djikstra(start, end)
+    # print(path.length)
     path = run_djikstra2(start, end)
     print(path.length)
-    path = run_Astar(start, end)
-    print(path.length)
-    path = run_Astar2(start, end)
-    print(path.length)
+    # path = run_Astar(start, end)
+    # print(path.length)
+    # path = run_Astar2(start, end)
+    # print(path.length)
+    border = full_djikstra(start, 1)
+    print([x[1] for x in border])
+    print(len(border))
+    # start, end = '08f194ad32cc83ac046bb8349e64ca81', '08f194ad32d1490a046bf9687066af0a'
     
-    start, end = '08f194ad32cc83ac046bb8349e64ca81', '08f194ad32d1490a046bf9687066af0a'
-    
-    paths = run_Yens(start, end, "Astar", 2, 0.5)
+    # paths = run_Yens(start, end, "Astar", 2, 0.5)
 
-    path = paths[0]
-    path = path.to_json()
-    path = Path.from_json(path)
+    # path = paths[0]
+    # path = path.to_json()
+    # path = Path.from_json(path)
     # for i, p in enumerate(paths):
     #     print(p.get_path_nodes())
     # print(paths[1])
     # places = path.get_places()
     # print(places)
-    path.summarize()
+    # path.summarize()
     # for path in paths:
     #     nodes = [p[1] for p in path]
     #     path_places = find_places_along_path(nodes)

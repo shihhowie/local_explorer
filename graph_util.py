@@ -24,6 +24,7 @@ def consolidate_segments(segments):
     # for connectors that are only along one path, and not connected to any other paths
     # we can ignore them
     node2segment = defaultdict(list)
+    segment2node = defaultdict(list)
     for segment in segments:
         if segment['properties']['subtype']!="road":
             # print(segment['properties']['subtype'])
@@ -33,14 +34,16 @@ def consolidate_segments(segments):
         for node in nodes:
             node_id = node["connector_id"]
             node2segment[node_id].append(segment_id)
+            segment2node[segment_id].append(node_id)
     valid_nodes = [node for node, seg_list in node2segment.items() if len(seg_list) > 1]
     consolidated_segments = defaultdict(list)
     for node in valid_nodes:
         segment_ids = node2segment[node]
         for segment_id in segment_ids:
             consolidated_segments[segment_id].append(node)
-    return consolidated_segments
+    return consolidated_segments, segment2node
 
 segments = load_connections()
-segments = consolidate_segments(segments)
-graph = build_graph(segments)
+segments_compact, segments = consolidate_segments(segments)
+graph = build_graph(segments_compact)
+full_graph = build_graph(segments)

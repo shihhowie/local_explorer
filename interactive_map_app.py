@@ -5,6 +5,8 @@ from dash_extensions import EventListener
 
 import plotly.graph_objects as go 
 from path_util import find_nearest_node
+from map_util import draw_circle, create_default_map
+from place_retriever import get_places
 import requests
 
 from collections import defaultdict
@@ -15,26 +17,6 @@ from path import Path
 app = dash.Dash(__name__)
  
 path_cache = {}
-
-def create_default_map(lat=51.515, lon=-0.118):
-    fig = go.Figure()
-    fig.add_trace(go.Scattermap(
-        lat=[51.515],
-        lon=[-0.118],
-        marker=dict(size=2, color="red"),
-        showlegend=False,
-        hoverinfo='skip',
-    ))
-    fig.update_layout(
-        map=dict(
-            style="open-street-map",
-            center=dict(lat=lat, lon=lon),
-            zoom=14
-        ),
-        margin={"r":0,"t":0,"l":0,"b":0}
-    )
-    # print("Default Map")
-    return fig
 
 app.layout = html.Div([
     # html.H1("Interactive Path Visualizer", style={"textAlign": "center"}),
@@ -60,7 +42,7 @@ app.layout = html.Div([
                 id = "search-overlay",
                 children=[
                     html.Div([
-                        html.H3("Search Segments and Connectors", style={"textAlign": "center"}),
+                        html.H3("Debug", style={"textAlign": "center", "margin-bottom": "5px"}),
                         html.Div([
                             dcc.Input(
                                 id="segment-id-input",
@@ -78,10 +60,7 @@ app.layout = html.Div([
                                 style={"width": "150px", "margin-right": "5px"}
                             ),
                             html.Button("Search", id="search-connector-button", n_clicks=0),
-                        ], style={"display": "flex", "alignItems": "center", "margin-bottom": "5px"}),
-                    ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"}),
-                    html.Div([
-                        html.H3("Search Geohash", style={"textAlign": "center"}),
+                        ], style={"display": "flex", "alignItems": "center", "margin-bottom": "10px"}),
                         html.Div([
                             dcc.Input(
                                 id="geohash-id-input",
@@ -90,10 +69,10 @@ app.layout = html.Div([
                                 style={"width": "150px", "margin-right": "5px"}
                             ),
                             html.Button("Search", id="search-geohash-button", n_clicks=0),
-                        ], style={"display": "flex", "alignItems": "center", "margin-bottom": "5px"}),
+                        ], style={"display": "flex", "alignItems": "center", "margin-bottom": "10px"}),
                     ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"}),
                     html.Div([
-                        html.H3("Find Path", style={"textAlign": "center"}),
+                        html.H3("Find Path", style={"textAlign": "center", "margin-bottom": "5px"}),
                         dcc.Input(
                             id="start-coord-input",
                             type="text",
@@ -109,8 +88,14 @@ app.layout = html.Div([
                         html.Div([
                             html.Button("Search", id="find-path-button", n_clicks=0)
                         ]),
-                    ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"})
-                ], style={"position": "absolute",  # Position the search buttons as an overlay
+                    ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1", "margin-bottom": "5px"}),
+                    html.Div([
+                        html.H3("Explore Neighborhood", style={"textAlign": "center", "margin-bottom": "5px"}),
+                        html.Button("Explore", id="explore-button", n_clicks=0)
+                    ], style={"display": "flex", "flexDirection": "column", "alignItems": "center", "flex": "1"}),
+                ], 
+                
+                style={"position": "absolute",  # Position the search buttons as an overlay
                         "top": "10px",  # Adjust the position from the top
                         "left": "10px",  # Adjust the position from the left
                         "background-color": "rgba(0, 0, 0, 0.7)",  # Semi-transparent background
@@ -120,7 +105,7 @@ app.layout = html.Div([
                         "width": "15%",
                         "z-index": "2",  # Place the search buttons above the map
                         "color": "white",  # Text color for better visibility}),
-                },
+                }
             ),
             html.Div(
                 id="path-panel",
@@ -143,7 +128,32 @@ app.layout = html.Div([
                         "width": "20%", 
                         # "height": "100%",
                         "position": "absolute"}
-                )
+                ),
+            html.Div(
+                id="explore-panel",
+                children=[
+                    html.Button("X", id="close-explore-panel-button", n_clicks=0, 
+                        style={"position": "absolute",
+                                "top": "5px",
+                                "right": "5px",
+                                "text-align": "center",
+                                "cursor": "pointer",}),
+                    html.H3("Explore Nearby Places", style={"textAlign": "center"}),
+                    html.Div([
+                        dcc.Input(
+                            id="radius-input",
+                            placeholder="Enter radius (km)",
+                            style={"width": "120px", "margin-right": "5px"}
+                        ),
+                        html.Button("Search", id="search-radius-button", n_clicks=0),
+                    ], style={"display": "flex", "alignItems": "center", "margin-bottom": "10px"}),
+                ],
+                style={"display": "none",  # Initially hidden
+                    "position": "absolute", "top": "50px", "right": "10px", 
+                    "background-color": "rgba(0, 0, 0, 0.7)", "padding": "10px", 
+                    "border-radius": "10px", "width": "20%", "z-index": "3", 
+                    "color": "white"}
+            ),
         ])
     ]),
     html.Div(
@@ -188,27 +198,65 @@ app.layout = html.Div([
     dcc.Tooltip(id="hover-tooltip"),
     # Map visualization
     dcc.Store(id="current-map", data=create_default_map().to_plotly_json()),
-    dcc.Store(id="paths-panel-state", data={}),
+    dcc.Store(id="panel-state", data={}),
     dcc.Store(id="path-data", data={}),
     dcc.Store(id="geohash-grid-state", data=defaultdict(bool)),
     dcc.Store(id="show-place-state", data=defaultdict(bool)),
     dcc.Store(id="show-path-state", data={}),
-    dcc.Store(id="show-segment-state", data={}),
+    dcc.Store(id="show-debug-state", data={}),
     dcc.Store(id="show-cat-place-state", data={}),
     dcc.Store(id="path-detail-state", data={"visible": False, "text": ""}),
     dcc.Store(id="highlight-place-state", data={}),
-    dcc.Store(id="user-location", data=None)
+    dcc.Store(id="user-location", data=None),
+    dcc.Store(id="explore-state", data={})
 ])
+
+@app.callback(
+    Output("explore-panel", "style"),
+    [Input("panel-state", "data")]
+)
+def toggle_explore_panel(panel_state):
+    if panel_state.get("show") and panel_state["panel"]=="explore":
+        return  {"position": "absolute",  # Position the search buttons as an overlay
+                    "top": "calc(20px + 50vh + 20px)",  # Adjust the position from the top
+                    "left": "10px",  # Adjust the position from the left
+                    "background-color": "rgba(0, 0, 0, 0.7)",  # Semi-transparent background
+                    "padding": "10px",
+                    "border-radius": "10px",
+                    "width": "15%",
+                    "alignItems": "center",
+                    "z-index": "2",  # Place the search buttons above the map
+                    "color": "white",  # Text color for better visibility}),
+                }
+    else:
+        return {"display": "none"}
+
+@app.callback(
+    Output("explore-state", "data"),
+    [Input("search-radius-button", "n_clicks")],
+    [State("radius-input", "value"), 
+     State("user-location", "data"),
+     State("explore-state", "data")]
+)
+def explore_nearby_places(n_clicks, radius, user_location, explore_state):
+    if n_clicks > 0 and radius and user_location:
+        lat, lon = user_location["lat"], user_location["lon"]
+        radius_km = float(radius)
+        places = get_places((lat, lon), radius_km)
+        place_ids = [x['id'] for x in places]
+        explore_state = {"radius": radius_km, "visible": True, "place_ids": place_ids}
+        
+    return explore_state
 
 @app.callback(
     [
         Output("path-data", "data"),
-        Output("paths-panel-state", "data"),
+        Output("panel-state", "data"),
         Output("geohash-grid-state", "data"),
         Output("show-place-state", "data"),
         Output("show-path-state", "data"),
         Output("path-detail-state", "data"),
-        Output("show-segment-state", "data"),
+        Output("show-debug-state", "data"),
     ],
     [
         Input("find-path-button", "n_clicks"),
@@ -221,6 +269,8 @@ app.layout = html.Div([
         Input({"type": "show-path-button", "index": ALL}, "n_clicks"),
         Input({"type": "path-detail-button", "index": ALL}, "n_clicks"),
         Input("close-detail-button", "n_clicks"),
+        Input("explore-button", "n_clicks"),
+        Input("close-explore-panel-button", "n_clicks")
     ],
     [
         State("start-coord-input", "value"),
@@ -229,29 +279,30 @@ app.layout = html.Div([
         State("connector-id-input", "value"),
         State("geohash-id-input", "value"),
         State("path-data", "data"),
-        State("paths-panel-state", "data"),
+        State("panel-state", "data"),
         State("geohash-grid-state", "data"),
         State("show-place-state", "data"),
-        State("show-path-state", "data"),
+        State("show-debug-state", "data"),
         State("path-detail-state", "data"),
-        State("show-segment-state", "data")
+        State("show-debug-state", "data")
     ]
 )
 def update_states(find_path_clicks, segment_clicks, connector_clicks, 
                         geohash_clicks, geohash_button_clicks, place_button_clicks,
                         close_panel_clicks, show_path_click, path_detail_clicks, close_path_detail_clicks,
+                        explore_button_clicks, close_explore_button_clicks,
                         start_coord, finish_coord, segment_id, connector_id, geohashes, path_data, 
-                        paths_panel_state, geohash_grid_state, show_places_state, show_path_state,
-                        path_detail_state, show_segment_state):
+                        panel_state, geohash_grid_state, show_places_state, show_path_state,
+                        path_detail_state, show_debug_state):
     ctx = dash.callback_context
     if not ctx.triggered:
         return  ( path_data, 
-                paths_panel_state, 
+                panel_state, 
                 geohash_grid_state, 
                 show_places_state, 
                 show_path_state, 
                 path_detail_state,
-                show_segment_state)
+                show_debug_state)
 
     triggered_id = ctx.triggered[0]["prop_id"].split(".")[0]
     print("triggered_id:",triggered_id)
@@ -260,15 +311,20 @@ def update_states(find_path_clicks, segment_clicks, connector_clicks,
         if not start_coord and not finish_coord:
             start_coord, finish_coord = "x", "x"
         fig, path_data = find_shortest_paths(start_coord, finish_coord)
-        paths_panel_state = {"show": True, "fig": fig.to_plotly_json()}
+        panel_state = {"show": True, "panel": "path","fig": fig.to_plotly_json()}
+        show_path_state = {}
     elif triggered_id == "close-path-panel-button":
-        paths_panel_state = {"show": False}
+        panel_state = {"show": False}
+    elif triggered_id == "explore-button":
+        panel_state = {"show": True, "panel": "explore"}
+    elif triggered_id =="close-explore-panel-button":
+        panel_state = {"show": False}
     elif triggered_id == "search-segment-button":
-        show_segment_state["segment_id"] = segment_id
+        show_debug_state["segment_id"] = segment_id
     elif triggered_id == "search-connector-button":
-        fig = show_connector(connector_id)
+        show_debug_state["connector_id"] = connector_id
     elif triggered_id=="search-geohash-button":
-        fig = show_geohash(geohashes)
+        show_debug_state["geohash"] = geohashes
     elif "show-geohash-button" in triggered_id:
         path_id = path_detail_state["path_id"]
         geohash_grid_state[path_id] = not geohash_grid_state.get(path_id)
@@ -279,7 +335,7 @@ def update_states(find_path_clicks, segment_clicks, connector_clicks,
         path_id = str(eval(triggered_id)["index"])
         show_path_state[path_id] = not show_path_state.get(path_id, True)
     elif "path-detail-button" in triggered_id:
-        fig = go.Figure(paths_panel_state["fig"])
+        fig = go.Figure(panel_state["fig"])
         path_id = str(eval(triggered_id)["index"])
         path_detail_state = {"visible": True, "path_id": path_id}
     elif "close-detail-button" in triggered_id:
@@ -287,50 +343,62 @@ def update_states(find_path_clicks, segment_clicks, connector_clicks,
 
     return  (
             path_data, 
-            paths_panel_state, 
+            panel_state, 
             geohash_grid_state, 
             show_places_state, 
             show_path_state, 
             path_detail_state,
-            show_segment_state)
+            show_debug_state)
 
 
 @app.callback(
     Output("map-visualization", "figure"),
-    [Input("paths-panel-state", "data"),
+    [Input("panel-state", "data"),
      Input("geohash-grid-state", "data"),
      Input("show-place-state", "data"),
      Input("show-path-state", "data"),
      Input("path-detail-state", "data"),
      Input("show-cat-place-state", "data"),
      Input("highlight-place-state", "data"),
-     Input("show-segment-state", "data"),
-     Input("user-location", "data")],
+     Input("show-debug-state", "data"),
+     Input("user-location", "data"),
+     Input("explore-state", "data")],
     [State("path-data", "data")]
 )
-def update_map(paths_panel_state, geohash_grid_state, show_place_state, 
+def update_map(panel_state, geohash_grid_state, show_place_state, 
                 show_path_state, path_detail_state, show_cat_place_state,
-                highlight_place_state, show_segment_state, user_location, path_data):
-    print("update_map")
-    # print(map_state)
+                highlight_place_state, show_debug_state, user_location, 
+                explore_state, path_data):
 
-    print("paths_panel_state", paths_panel_state.get("show"))
+    print("panel_state", panel_state)
     # retrieved paths
-    if paths_panel_state.get("show", False):
-        fig = go.Figure(paths_panel_state["fig"])
+    # print("explore_state", explore_state)
+    print("show_debug_state", show_debug_state)
+    if panel_state.get("show", False) and panel_state["panel"]=="path":
+        fig = go.Figure(panel_state["fig"])
     else:
         if path_data:
             start_lat, start_lon = path_data["0"]["center"]
             fig = create_default_map(start_lat, start_lon)
+        elif explore_state.get("visible"):
+            lat, lon = user_location["lat"], user_location["lon"]
+            fig = create_default_map(lat, lon)
+            radius_km = explore_state["radius"]
+            draw_circle(fig, lat, lon, radius_km)
+            show_places(fig, explore_state["place_ids"], "places in area")
         else: 
             if user_location is None:
                 fig = create_default_map()
             else:
-                print("location")
                 lat, lon = user_location["lat"], user_location["lon"] 
-                fig = create_default_map
-        if show_segment_state.get("segment_id"):
-            fig = show_segment(show_segment_state["segment_id"])
+                fig = create_default_map(lat, lon)
+        if show_debug_state.get("segment_id"):
+            show_segment(fig, show_debug_state["segment_id"])
+        if show_debug_state.get("connector_id"):
+            show_connector(fig, show_debug_state["connector_id"])
+        if show_debug_state.get("geohash"):
+            geohashes = show_debug_state["geohash"].split(",")
+            show_geohash(fig, geohashes)
 
     hide_paths_ids = [f"{p}" for p in show_path_state if not show_path_state[p]]
     print("hide_paths_ids", hide_paths_ids)
@@ -351,7 +419,7 @@ def update_map(paths_panel_state, geohash_grid_state, show_place_state,
         if geohash_grid_state.get(path_id, False):
             geohashes = path_data[path_id]["geohashes"]
             color = path_data[path_id]['color']
-            get_geohash_corners(fig, geohashes, path_id, color)
+            show_geohash(fig, geohashes, path_id)
 
         print("show_place_state", show_place_state)
         if show_place_state.get(path_id, False):
@@ -443,13 +511,13 @@ def show_path_detail_modal(path_detail_state, path_data):
 
 @app.callback(
     [Output("path-panel", "style"), Output("path-legends", "children")],
-    [Input("paths-panel-state", "data")],
+    [Input("panel-state", "data")],
     [State("path-data", "data")]
 )
-def show_path_panel(paths_panel_state, path_data):
+def show_path_panel(panel_state, path_data):
     panel_style = {"display": "none"}
     legend_items = []
-    if paths_panel_state.get("show", False):
+    if panel_state.get("show", False) and panel_state["panel"]=="path":
         panel_style = {"position": "absolute",  # Position the search buttons as an overlay
                     "top": "calc(20px + 50vh + 20px)",  # Adjust the position from the top
                     "left": "10px",  # Adjust the position from the left
@@ -549,7 +617,7 @@ def toggle_category_content(n_clicks, path_detail_state, path_data, show_cat_pla
     for place_id, name in place_names.items():
         place_items.append(html.Button(name, 
                 id={"type": "place-button", "index": place_id},
-                style={"padding": "5px 0", "font-size": "12px", 
+                style={"font-size": "12px", 
                         "cursor": "pointer", "width": "100%",
                         "background-color": "none",
                         "padding": "10px",
@@ -581,12 +649,8 @@ def highlight_place_on_map(n_clicks_list, highlighted_place):
     return highlighted_place
 
 
-def show_segment(segment_id):
+def show_segment(fig, segment_id):
     # Create a new figure
-    if not show_segment:
-        return create_default_map()
-
-    fig = go.Figure()
     road_info = segment_info[segment_id]
     if road_info["foot"]:
         node_type = "foot"
@@ -639,14 +703,12 @@ def show_segment(segment_id):
         margin={"r": 0, "t": 0, "l": 0, "b": 0},
         showlegend=False
     )
-    return fig
 
-def show_connector(connector_id):
+def show_connector(fig, connector_id):
     # Create a new figure
     if not connector_id:
         return create_default_map()
     # print("show connector ", connector_id)
-    fig = go.Figure()
 
     # Check if the segment ID exists
     if connector_id in node2coord:
@@ -709,8 +771,8 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
             finish_lon, finish_lat = map(float, finish_coord.split(","))
 
         # Find the nearest nodes to the start and finish coordinates
-        start_node, _ = find_nearest_node(start_lon, start_lat, geohash2node, node2coord)
-        finish_node, _ = find_nearest_node(finish_lon, finish_lat, geohash2node, node2coord)
+        start_node, _ = find_nearest_node(start_lon, start_lat)
+        finish_node, _ = find_nearest_node(finish_lon, finish_lat)
         
         start_lon, start_lat = node2coord[start_node]
         finish_lon, finish_lat = node2coord[finish_node]
@@ -819,54 +881,52 @@ def find_shortest_paths(start_coord='x', finish_coord='x'):
     [Input("location-listener", "event")]
 )
 def update_user_location(event):
-    print("update user location")
+    print("update user location", event)
     if event is None:
-        return None
+        print("no user location event")
+        return {"lat":51.515, "lon":-0.118}
     lat = event["coords.latitude"]
     lon = even["coords.longitude"]
     return {"lat": lat, "lon": lon}
 
-def show_geohash(geohashes):
-    fig = create_default_map()
-    geohashes = geohashes.split(",")
-    get_geohash_corners(fig, geohashes)
-    
-    return fig
+def show_geohash(fig, geohashes, idx=0, color='blue'):
+    lats, lons = get_geohash_corners(geohashes)
+    if not lats or not lons:
+        fig.add_annotation(
+                text=f"Error: Could not find geohash {geohash}. Check inputs.",
+                x=0.5, y=0.5, showarrow=False,
+                font=dict(size=20),
+                xref="paper", yref="paper"
+            )
+    else:
+        fig.add_trace(go.Scattermap(
+            lat=lats,
+            lon=lons,
+            mode="lines",
+            line=dict(width=1, color='blue'),
+            name=f"geohashes {idx}",
+            showlegend=False
+            )
+        )
 
-def get_geohash_corners(fig, geohashes, idx=0, color='blue'):
+def get_geohash_corners(geohashes):
     lats = []
     lons = []
     geohashes = sorted(geohashes)
     for geohash in geohashes:
         try:
             lat, lon, elat, elon = geohash2.decode_exactly(geohash)
+            sw = (lat-elat, lon-elon)
+            ne = (lat+elat, lon+elon)
+            nw = (lat+elat, lon-elon)
+            se = (lat-elat, lon+elon)
+            corners  = [sw, nw, ne, se, sw]
+            # print(corners)
+            lats += [float(corner[1]) for corner in corners]+[None]
+            lons += [float(corner[0]) for corner in corners]+[None]
         except Exception as e:
-            print(f"Error: {e}")
-            fig.add_annotation(
-                text=f"Error: Could not find geohash {geohash}. Check inputs.",
-                x=0.5, y=0.5, showarrow=False,
-                font=dict(size=20),
-                xref="paper", yref="paper"
-            )
-            return fig
-
-        sw = (lat-elat, lon-elon)
-        ne = (lat+elat, lon+elon)
-        nw = (lat+elat, lon-elon)
-        se = (lat-elat, lon+elon)
-        corners  = [sw, nw, ne, se, sw]
-        # print(corners)
-        lats += [float(corner[1]) for corner in corners]+[None]
-        lons += [float(corner[0]) for corner in corners]+[None]
-    fig.add_trace(go.Scattermap(
-        lat=lats,
-        lon=lons,
-        mode="lines",
-        line=dict(width=1, color=color),
-        name=f"geohashes {idx}",
-        showlegend=False
-        )
-    )
+            print(f"Error: {e} {geohash}")
+    return lats, lons
 
 def show_places(fig, place_ids, idx=0, color='blue'):
     coords = [places[x]['coord'] for x in place_ids]
@@ -897,27 +957,6 @@ def show_places(fig, place_ids, idx=0, color='blue'):
                 marker=dict(size=6, color=color),
             ))
 
-def highlight_place(fig, place_id, color):
-    coord = places[place_id]["coord"]
-    name = places[place_id]["name"]
-    fig.add_trace(go.Scattermap(
-        lat = [coord[1]], lon=[coord[0]],
-        mode="markers",
-        marker=dict(size=14, color="white"),
-        name="highlited place border",
-        opacity=0.7,
-        showlegend=False
-    ))
-    fig.add_trace(go.Scattermap(
-        lat = [coord[1]], lon=[coord[0]],
-        mode="markers+text",
-        text=[name],
-        marker=dict(size=10, color=color, opacity=0.7),
-        textfont=dict(color=color),
-        textposition="top right",
-        name="highlited place",
-        showlegend=False
-    ))
 
 from path_util import segment2coords, node2geohash, geohash2node, node2coord, segment_info
 from path_util import places

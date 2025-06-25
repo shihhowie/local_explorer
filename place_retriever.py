@@ -1,6 +1,12 @@
 import psycopg2
 import geohash2
+import json
 from math import *
+
+from pymongo import MongoClient
+client = MongoClient("mongodb://localhost:27017/")
+db = client.localexplorer
+places_details = db.places
 
 DB_NAME="testdb"
 DB_USER="howardshih"
@@ -64,7 +70,7 @@ def get_geohashes(bounding_box, prec):
         lat += dlat
     return list(geohashes)
 
-def fetch_places(geohashes):
+def fetch_places_sql(geohashes):
     try:
         conn = psycopg2.connect(
                 dbname=DB_NAME,
@@ -106,13 +112,13 @@ def fetch_places(geohashes):
         print(f"Error connecting to the database: {e}")
         return []
 
-def fine_tune(coordinates, rows, radius):
+def fine_tune(coordinates, places, radius):
     lat, lon = coordinates[0], coordinates[1]
     R = 6471
     res = []
-    for row in rows:
-        coord = row[1].strip('[]').replace(' ','').split(",")
-        lon2, lat2 = float(coord[0]), float(coord[1])
+    for place in places:
+        lon2, lat2  = place['coord']
+        # lon2, lat2 = float(coord[0]), float(coord[1])
         dlat = radians(lat2 - lat)
         dlon = radians(lon2 - lon)
 
@@ -121,21 +127,53 @@ def fine_tune(coordinates, rows, radius):
         distance = R * c
         if distance <= radius:
             # print("filtered out", distance)
-            res.append(row)
+            res.append(place)
     return res
 
-def get_places(curr_location, radius):
+def fetch_places(geohashes, prec):
+    places = []
+
+    with open("local_data/coffee_EC.txt") as f:
+        for line in f:
+            place = json.loads(line)
+            lon, lat = place['coord']
+            geohash = geohash2.encode(lat, lon, precision=prec)
+            if geohash in geohashes:
+                places.append(place)
+    return places 
+
+def get_places(curr_location, radius=1):
     # get the biggest bounding box that contains the radius
     bounding_box, prec = get_bounding_box(curr_location, radius)
     # get all the geohashes in the bounding box
     geohashes = get_geohashes(bounding_box, prec)
     # make query to psql for the places in the geohashes
-    rows = fetch_places(geohashes)
-    print("rough fetch ", len(rows))
-    rows = fine_tune(curr_location, rows, radius)
-    print("fine tune ", len(rows))
-    return rows
+    places = fetch_places(set(geohashes), prec)
+    print("rough fetch ", len(places))
+    places = fine_tune(curr_location, places, radius)
+    print("fine tune ", len(places))
+    return places
+
+
+def find_similar_places(query_place, candidates=None):
+    from hnsw import HNSW
+    hnsw = HNSW.load()
+    query_vec = hnsw.emb[query_place]
+    nearest_nodes = hnsw.search(query_vec, 5, candidates)
+    return nearest_nodes
+
+
+def store_place_in_mongodb():
+    places = []
+    with open("local_data/coffee_EC.txt") as f:
+        for line in f:
+            place = json.loads(line)
+            places.append(place)
+    result = places_details.insert_many(places)
+    print(f"Inserted {len(result.inserted_ids)} documents into MongoDB.")
 
 if __name__ == "__main__":
     places = get_places((51.52140, -0.11142), 1)
+    
     # print(places)
+    store_place_in_mongodb()
